@@ -39,7 +39,8 @@ npm run dev                  # num terminal
 ./scripts/audio-falso.sh     # noutro: abre o Chrome com frases em pt-BR como microfone
 ```
 
-Precisa do `ffmpeg`. No Chrome que abrir, clique em **Falar com o agente** e espere as quatro frases.
+Precisa do `ffmpeg`. O Chrome abre em `/?auto=75`: a conversa começa sozinha, encerra depois de 75 s e o terminal
+do `npm run dev` imprime as linhas `[latencia-navegador]` e `[latencia-agora]`.
 
 ## Como funciona
 

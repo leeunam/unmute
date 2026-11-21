@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resumir, type Resumo } from "@/lib/resumo";
 import type { IAgoraRTCClient, IMicrophoneAudioTrack, IRemoteAudioTrack } from "agora-rtc-sdk-ng";
 
@@ -133,6 +133,11 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel: s.channel, agentId: s.agentId }),
       });
+      await fetch("/api/latencia", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentId: s.agentId, navegador_ms: latencias }),
+      }).catch(() => {});
       // Os turnos podem demorar um pouco para aparecer depois que o agente sai.
       for (let tentativa = 1; tentativa <= 5; tentativa++) {
         setStatus(`Buscando a latência medida pela Agora (tentativa ${tentativa})…`);
@@ -152,6 +157,22 @@ export default function Home() {
       setEstado("parado");
     }
   }
+
+  // Modo automático para medir sem ninguém clicar: /?auto=70 começa sozinho
+  // e encerra depois de 70 s (usado por scripts/audio-falso.sh).
+  const iniciarRef = useRef(iniciar);
+  const encerrarRef = useRef(encerrar);
+  iniciarRef.current = iniciar;
+  encerrarRef.current = encerrar;
+  const autoIniciado = useRef(false);
+  useEffect(() => {
+    const auto = Number(new URLSearchParams(window.location.search).get("auto"));
+    // A trava evita subir dois agentes quando o React roda o efeito duas vezes (dev).
+    if (!auto || autoIniciado.current) return;
+    autoIniciado.current = true;
+    iniciarRef.current();
+    setTimeout(() => encerrarRef.current(), auto * 1000);
+  }, []);
 
   const resumoNavegador = resumir(latencias);
 

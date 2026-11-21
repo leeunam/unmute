@@ -3,6 +3,8 @@
 # esse arquivo como microfone. Serve para medir latência sem uma pessoa falando.
 # Precisa de macOS (comando say) e ffmpeg.
 # Uso: npm run dev em outro terminal, depois ./scripts/audio-falso.sh
+# A página começa sozinha (?auto=75), encerra depois de 75 s e o terminal do
+# npm run dev imprime as linhas [latencia-navegador] e [latencia-agora].
 set -euo pipefail
 dir="$(mktemp -d)"
 frases=(
@@ -28,5 +30,6 @@ open -na "Google Chrome" --args \
   --user-data-dir="$dir/chrome" \
   --use-fake-ui-for-media-stream \
   --use-fake-device-for-media-stream \
+  --autoplay-policy=no-user-gesture-required \
   "--use-file-for-fake-audio-capture=$dir/fala.wav%noloop" \
-  "${URL:-http://localhost:3000}"
+  "${URL:-http://localhost:3000}/?auto=75"

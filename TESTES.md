@@ -18,7 +18,8 @@ Plano B do LLM (spec, seção 9): `LLM_PROVIDER=openai-gerenciado` usa `gpt-4.1-
 
 ### Como medir
 
-1. `npm run dev` e abrir http://localhost:3000 (ou `./scripts/audio-falso.sh` para usar frases gravadas).
+1. `npm run dev` e abrir http://localhost:3000. Sem ninguém falando: `./scripts/audio-falso.sh` começa e encerra sozinho
+   e o terminal do `npm run dev` imprime `[latencia-navegador]` e `[latencia-agora]`.
 2. Conversar pelo menos 5 turnos e clicar em **Encerrar conversa**.
 3. Anotar as duas medidas da página:
    - **Navegador:** último som da fala até o primeiro som do agente. Inclui a espera do VAD e a rede.
