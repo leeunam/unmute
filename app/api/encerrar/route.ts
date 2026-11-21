@@ -10,6 +10,6 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[encerrar]", message);
-    return NextResponse.json({ erro: message }, { status: 502 });
+    return NextResponse.json({ erro: message }, { status: 500 });
   }
 }

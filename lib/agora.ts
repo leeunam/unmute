@@ -4,9 +4,10 @@
 //   leave: https://docs.agora.io/en/api-reference/api-ref/conversational-ai/leave
 //   turns: https://docs.agora.io/en/api-reference/api-ref/conversational-ai/turns
 //   auth:  https://docs.agora.io/en/api-reference/api-ref/conversational-ai/authentication
-//   Claude: https://docs.agora.io/en/ai/models/llm/claude
+//   LLM customizado: https://docs.agora.io/en/ai/build/custom-model-integration/custom-llm
 //   modo gerenciado (ASR/TTS sem chave): https://docs.agora.io/en/ai/build/managed-mode
 import { ConvoAITokenBuilder, RtcRole, RtcTokenBuilder } from "agora-token";
+import { FEITA_GATEWAY, feitaModelId } from "./feita";
 import { resumir } from "./resumo";
 
 const API_BASE = "https://api.agora.io/api/conversational-ai-agent/v2/projects";
@@ -60,46 +61,48 @@ Se não entender o que a pessoa disse, peça para ela repetir.`;
 const GREETING = "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
 const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
 
-function llmConfig() {
-  const provider = process.env.LLM_PROVIDER ?? "claude";
+function llmConfig(origin: string) {
+  const provider = process.env.LLM_PROVIDER ?? "feita-proxy";
   const common = {
     system_messages: [{ role: "system", content: SYSTEM_PROMPT }],
     greeting_message: GREETING,
     failure_message: FAILURE,
     max_history: 20,
+    style: "openai",
+    params: { model: feitaModelId(), max_tokens: 300 },
   };
 
-  if (provider === "claude") {
+  if (provider === "feita-proxy") {
+    // A Agora chama a nossa rota (/api/llm/chat/completions) pelo túnel público;
+    // a rota usa o AI SDK com a feita.ai. Tools, estado e logs ficam do nosso lado.
+    const publicUrl = (process.env.PUBLIC_URL || origin).replace(/\/$/, "");
+    if (/localhost|127\.0\.0\.1/.test(publicUrl)) {
+      throw new Error(
+        "A Agora não alcança localhost. Rode npm run tunel e abra o app pelo endereço https://…trycloudflare.com (ou defina PUBLIC_URL).",
+      );
+    }
     return {
       ...common,
-      url: "https://api.anthropic.com/v1/messages",
-      api_key: env("ANTHROPIC_API_KEY"),
-      // O SDK oficial (agora-agents) manda headers como objeto.
-      headers: { "anthropic-version": "2023-06-01" },
-      style: "anthropic",
-      params: {
-        model: process.env.CLAUDE_MODEL ?? "claude-haiku-5-5",
-        max_tokens: 300,
-      },
+      vendor: "custom",
+      url: `${publicUrl}/api/llm/chat/completions`,
+      api_key: env("LLM_PROXY_SECRET"),
     };
   }
 
-  if (provider === "openai-gerenciado") {
-    // Plano B da spec (seção 9): LLM gerenciado pela Agora, sem chave nossa.
+  if (provider === "feita-direto") {
+    // A Agora chama o gateway da feita.ai direto. Serve de base para medir o
+    // quanto a nossa rota + túnel somam na latência.
     return {
       ...common,
-      credential_mode: "managed",
-      vendor: "openai",
-      style: "openai",
-      url: "https://api.openai.com/v1/chat/completions",
-      params: { model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini" },
+      url: `${FEITA_GATEWAY}/chat/completions`,
+      api_key: env("FEITA_API_KEY"),
     };
   }
 
-  throw new Error(`LLM_PROVIDER inválido: ${provider}. Use "claude" ou "openai-gerenciado".`);
+  throw new Error(`LLM_PROVIDER inválido: ${provider}. Use "feita-proxy" ou "feita-direto".`);
 }
 
-export function joinBody(channel: string) {
+export function joinBody(channel: string, origin: string) {
   return {
     name: `desenrola-${channel}`,
     properties: {
@@ -114,7 +117,7 @@ export function joinBody(channel: string) {
         vendor: "ares",
         language: "pt-BR",
       },
-      llm: llmConfig(),
+      llm: llmConfig(origin),
       // TTS gerenciado pela Agora (MiniMax): sem chave, tem vozes em português.
       tts: {
         credential_mode: "managed",
@@ -165,8 +168,8 @@ async function agoraFetch(channel: string, path: string, init: { method: string;
   return data;
 }
 
-export async function startAgent(channel: string): Promise<{ agent_id: string; status: string }> {
-  return (await agoraFetch(channel, "/join", { method: "POST", body: joinBody(channel) })) as {
+export async function startAgent(channel: string, origin: string): Promise<{ agent_id: string; status: string }> {
+  return (await agoraFetch(channel, "/join", { method: "POST", body: joinBody(channel, origin) })) as {
     agent_id: string;
     status: string;
   };

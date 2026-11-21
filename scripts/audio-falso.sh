@@ -2,7 +2,8 @@
 # Gera um WAV com frases em pt-BR separadas por silêncio e abre o Chrome usando
 # esse arquivo como microfone. Serve para medir latência sem uma pessoa falando.
 # Precisa de macOS (comando say) e ffmpeg.
-# Uso: npm run dev em outro terminal, depois ./scripts/audio-falso.sh
+# Uso: npm run dev e npm run tunel em outros terminais, depois
+#   URL=https://<endereço-do-túnel> ./scripts/audio-falso.sh
 # A página começa sozinha (?auto=75), encerra depois de 75 s e o terminal do
 # npm run dev imprime as linhas [latencia-navegador] e [latencia-agora].
 set -euo pipefail
