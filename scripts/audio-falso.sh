@@ -32,5 +32,6 @@ open -na "Google Chrome" --args \
   --use-fake-ui-for-media-stream \
   --use-fake-device-for-media-stream \
   --autoplay-policy=no-user-gesture-required \
+  --disable-features=AudioServiceSandbox \
   "--use-file-for-fake-audio-capture=$dir/fala.wav%noloop" \
   "${URL:-http://localhost:3000}/?auto=75"

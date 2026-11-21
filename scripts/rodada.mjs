@@ -1,0 +1,40 @@
+// Uma rodada de medição sem ninguém falando: abre o Chrome com um WAV como
+// microfone, deixa a página conversar sozinha (?auto=N) e imprime os números.
+// No fim, confere que nenhum agente ficou de pé.
+// Uso: node scripts/rodada.mjs <url-do-túnel> <fala.wav> [segundos=75]
+// O WAV sai de: SO_GERAR=1 ./scripts/audio-falso.sh
+import puppeteer from "puppeteer-core";
+
+const [url, wav, segundos = "75"] = process.argv.slice(2);
+const browser = await puppeteer.launch({
+  executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  headless: true,
+  args: [
+    "--use-fake-ui-for-media-stream",
+    "--use-fake-device-for-media-stream",
+    `--use-file-for-fake-audio-capture=${wav}%noloop`,
+    "--autoplay-policy=no-user-gesture-required",
+    // Sem isso o serviço de áudio do Chrome não consegue ler o WAV e o microfone fica mudo.
+    "--disable-features=AudioServiceSandbox",
+  ],
+});
+try {
+  const page = await browser.newPage();
+  page.on("console", (m) => {
+    const t = m.text();
+    if (!/AgoraRTC|agora-rtc/i.test(t) || /error/i.test(t)) console.log(`[console] ${t.slice(0, 300)}`);
+  });
+  page.on("pageerror", (e) => console.log(`[pageerror] ${e.message}`));
+  await page.goto(`${url}/?auto=${segundos}`, { waitUntil: "networkidle2" });
+  await page.waitForFunction(
+    () => /Sessão encerrada|Falta|erro/i.test(document.body.innerText) && !/Buscando/.test(document.body.innerText),
+    { timeout: (Number(segundos) + 60) * 1000, polling: 1000 },
+  );
+  console.log("----- página -----");
+  console.log(await page.evaluate(() => document.querySelector("main")?.innerText));
+} finally {
+  await browser.close();
+  const res = await fetch(`${url}/api/agentes`).then((r) => r.json());
+  console.log("----- agentes de pé -----", JSON.stringify(res));
+  if (res.agentes?.length) console.log(JSON.stringify(await fetch(`${url}/api/agentes`, { method: "POST" }).then((r) => r.json())));
+}

@@ -206,3 +206,13 @@ export async function getTurns(channel: string, agentId: string) {
     resumo: resumir(e2e),
   };
 }
+
+/** Agentes ainda de pé (IDLE, STARTING, RUNNING) nas últimas 2 h. */
+export async function listRunning(): Promise<{ agent_id: string; channel: string; status: string }[]> {
+  const data = (await agoraFetch("listagem", "/agents?state=0,1,2&limit=50", { method: "GET" })) as {
+    data?: { list?: { agent_id: string; channel?: string; status: string }[] };
+    list?: { agent_id: string; channel?: string; status: string }[];
+  };
+  const list = data.data?.list ?? data.list ?? [];
+  return list.map((a) => ({ agent_id: a.agent_id, channel: a.channel ?? "", status: a.status }));
+}
