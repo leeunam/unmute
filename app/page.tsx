@@ -66,6 +66,27 @@ export default function Home() {
     }, POLL_MS);
   }
 
+  // Grava a voz do agente para comparar TTS de ouvido (scripts/rodada.mjs lê window.__gravacao).
+  const gravador = useRef<MediaRecorder | null>(null);
+  function gravarAgente() {
+    const track = remoto.current?.getMediaStreamTrack();
+    if (!track || gravador.current || typeof MediaRecorder === "undefined") return;
+    const partes: Blob[] = [];
+    const rec = new MediaRecorder(new MediaStream([track]));
+    rec.ondataavailable = (e) => partes.push(e.data);
+    const w = window as unknown as { __gravacao?: Promise<string> };
+    w.__gravacao = new Promise((resolve) => {
+      rec.onstop = async () => {
+        const buf = await new Blob(partes, { type: rec.mimeType }).arrayBuffer();
+        let bin = "";
+        new Uint8Array(buf).forEach((b) => (bin += String.fromCharCode(b)));
+        resolve(btoa(bin));
+      };
+    });
+    rec.start(1000);
+    gravador.current = rec;
+  }
+
   async function iniciar() {
     setErro("");
     setTurnos(null);
@@ -89,6 +110,7 @@ export default function Home() {
         await c.subscribe(user, "audio");
         remoto.current = user.audioTrack ?? null;
         remoto.current?.play();
+        gravarAgente();
         setStatus("Pode falar. O agente está ouvindo.");
       });
       c.on("user-unpublished", () => {
@@ -110,6 +132,8 @@ export default function Home() {
   }
 
   async function desligarLocal() {
+    if (gravador.current?.state === "recording") gravador.current.stop();
+    gravador.current = null;
     if (timer.current) clearInterval(timer.current);
     timer.current = null;
     mic.current?.close();

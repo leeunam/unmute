@@ -7,7 +7,7 @@
 //   LLM customizado: https://docs.agora.io/en/ai/build/custom-model-integration/custom-llm
 //   modo gerenciado (ASR/TTS sem chave): https://docs.agora.io/en/ai/build/managed-mode
 import { ConvoAITokenBuilder, RtcRole, RtcTokenBuilder } from "agora-token";
-import { FEITA_GATEWAY, feitaModelId } from "./feita";
+import { FEITA_GATEWAY, feitaModelId, feitaReasoning } from "./feita";
 import { resumir } from "./resumo";
 
 const API_BASE = "https://api.agora.io/api/conversational-ai-agent/v2/projects";
@@ -62,7 +62,7 @@ const GREETING = "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
 const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
 
 function llmConfig(origin: string) {
-  const provider = process.env.LLM_PROVIDER ?? "feita-proxy";
+  const provider = process.env.LLM_PROVIDER || "feita-proxy";
   const common = {
     system_messages: [{ role: "system", content: SYSTEM_PROMPT }],
     greeting_message: GREETING,
@@ -96,10 +96,48 @@ function llmConfig(origin: string) {
       ...common,
       url: `${FEITA_GATEWAY}/chat/completions`,
       api_key: env("FEITA_API_KEY"),
+      params: { ...common.params, reasoning: feitaReasoning(feitaModelId()) },
     };
   }
 
   throw new Error(`LLM_PROVIDER inválido: ${provider}. Use "feita-proxy" ou "feita-direto".`);
+}
+
+// ASR nativo da Agora (ARES): sem chave, aceita pt-BR.
+const ASR = { vendor: "ares", language: "pt-BR" };
+
+function ttsConfig() {
+  const vendor = process.env.TTS_VENDOR || "minimax";
+  if (vendor === "minimax") {
+    // TTS gerenciado pela Agora (MiniMax): sem chave, tem vozes em português.
+    return {
+      credential_mode: "managed",
+      vendor: "minimax",
+      params: {
+        url: "wss://api.minimax.io/ws/v1/t2a_v2",
+        model: "speech-2.8-turbo",
+        voice_setting: { voice_id: process.env.TTS_VOICE || "Portuguese_FriendlyNeighbor", speed: 1.0 },
+        audio_setting: { sample_rate: 24000 },
+        language_boost: "Portuguese",
+      },
+    };
+  }
+  if (vendor === "feita") {
+    // TTS do gateway da feita.ai (protocolo OpenAI /audio/speech) pelo generic_http da Agora.
+    // https://docs.agora.io/en/ai/models/tts/generic-http — o gateway devolve PCM 24 kHz.
+    return {
+      vendor: "generic_http",
+      url: `${FEITA_GATEWAY}/audio/speech`,
+      headers: { Authorization: `Bearer ${env("FEITA_API_KEY")}` },
+      params: {
+        model: process.env.TTS_MODEL || "elevenlabs/eleven-flash-v2.5",
+        voice: process.env.TTS_VOICE || "pNInz6obpgDQGcFmaJgB",
+        sample_rate: 24000,
+        response_format: "pcm",
+      },
+    };
+  }
+  throw new Error(`TTS_VENDOR inválido: ${vendor}. Use "minimax" ou "feita".`);
 }
 
 export function joinBody(channel: string, origin: string) {
@@ -112,34 +150,16 @@ export function joinBody(channel: string, origin: string) {
       remote_rtc_uids: [String(USER_UID)],
       enable_string_uid: false,
       idle_timeout: 60,
-      // ASR nativo da Agora (ARES): sem chave, aceita pt-BR.
-      asr: {
-        vendor: "ares",
-        language: "pt-BR",
-      },
+      asr: ASR,
       llm: llmConfig(origin),
-      // TTS gerenciado pela Agora (MiniMax): sem chave, tem vozes em português.
-      tts: {
-        credential_mode: "managed",
-        vendor: "minimax",
-        params: {
-          url: "wss://api.minimax.io/ws/v1/t2a_v2",
-          model: "speech-2.8-turbo",
-          voice_setting: {
-            voice_id: process.env.TTS_VOICE ?? "Portuguese_FriendlyNeighbor",
-            speed: 1.0,
-          },
-          audio_setting: { sample_rate: 24000 },
-          language_boost: "Portuguese",
-        },
-      },
+      tts: ttsConfig(),
       // Fim de fala semântico só existe para inglês e chinês; em pt-BR é VAD.
       // O padrão é 640 ms de silêncio; baixamos para ganhar latência.
       turn_detection: {
         config: {
           end_of_speech: {
             mode: "vad",
-            vad_config: { silence_duration_ms: Number(process.env.VAD_SILENCE_MS ?? 480) },
+            vad_config: { silence_duration_ms: Number(process.env.VAD_SILENCE_MS || 480) },
           },
         },
       },

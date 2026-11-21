@@ -14,3 +14,12 @@ export const feita = createOpenAICompatible({
   baseURL: FEITA_GATEWAY,
   apiKey: process.env.FEITA_API_KEY,
 });
+
+// Raciocínio custa latência na voz. Haiku 5.5 e Nemotron aceitam desligar;
+// Sonnet/Opus/Fable 5.x e Gemini exigem raciocínio, então vai o mínimo.
+// FEITA_REASONING (JSON) sobrescreve. Medições em TESTES.md.
+export function feitaReasoning(modelo: string): Record<string, unknown> {
+  if (process.env.FEITA_REASONING) return JSON.parse(process.env.FEITA_REASONING);
+  const obrigatorio = /^google\/|claude-(sonnet|opus|fable)/.test(modelo);
+  return obrigatorio ? { effort: "minimal" } : { enabled: false };
+}

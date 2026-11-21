@@ -4,7 +4,7 @@
 // estado e logs nas próximas fases.
 import { streamText, type ModelMessage } from "ai";
 import { NextRequest } from "next/server";
-import { feita, feitaModelId } from "@/lib/feita";
+import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
 
 type OpenAIMessage = { role: string; content: unknown };
 
@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     ...paraAiSdk(body.messages ?? []),
     maxOutputTokens: body.max_tokens ?? 300,
     abortSignal: req.signal,
+    providerOptions: { feita: { reasoning: feitaReasoning(modelo) } } as never,
     onError: ({ error }) => console.error("[llm] erro", error),
   });
 

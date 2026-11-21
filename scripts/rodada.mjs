@@ -1,11 +1,12 @@
 // Uma rodada de medição sem ninguém falando: abre o Chrome com um WAV como
 // microfone, deixa a página conversar sozinha (?auto=N) e imprime os números.
 // No fim, confere que nenhum agente ficou de pé.
-// Uso: node scripts/rodada.mjs <url-do-túnel> <fala.wav> [segundos=75]
+// Uso: node scripts/rodada.mjs <url-do-túnel> <fala.wav> [segundos=75] [gravacao.webm]
 // O WAV sai de: SO_GERAR=1 ./scripts/audio-falso.sh
 import puppeteer from "puppeteer-core";
 
-const [url, wav, segundos = "75"] = process.argv.slice(2);
+import { writeFileSync } from "node:fs";
+const [url, wav, segundos = "75", saidaAudio] = process.argv.slice(2);
 const browser = await puppeteer.launch({
   executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   headless: true,
@@ -30,6 +31,13 @@ try {
     () => /Sessão encerrada|Falta|erro/i.test(document.body.innerText) && !/Buscando/.test(document.body.innerText),
     { timeout: (Number(segundos) + 60) * 1000, polling: 1000 },
   );
+  if (saidaAudio) {
+    const b64 = await page.evaluate(() => window.__gravacao ?? null);
+    if (b64) {
+      writeFileSync(saidaAudio, Buffer.from(b64, "base64"));
+      console.log(`voz do agente gravada em ${saidaAudio}`);
+    }
+  }
   console.log("----- página -----");
   console.log(await page.evaluate(() => document.querySelector("main")?.innerText));
 } finally {
