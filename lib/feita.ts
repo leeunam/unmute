@@ -5,8 +5,10 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 export const FEITA_GATEWAY = "https://api.feita.ai/gateway/v1";
 
 export function feitaModelId() {
-  // Medido em 21/11/2026 (TESTES.md): o mais rápido de ponta a ponta na Agora.
-  return process.env.FEITA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
+  // Fase 2 (TESTES.md, seção 9): com a tool criar_tarefa, o Gemini Flash Lite acerta a
+  // tarefa em todas as rodadas. O Nemotron é mais rápido, mas pula a tool, inventa o
+  // produto e ignora tool_choice "required" no gateway da feita.
+  return process.env.FEITA_MODEL || "google/gemini-3.5-flash-lite";
 }
 
 export const feita = createOpenAICompatible({

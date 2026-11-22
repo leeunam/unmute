@@ -17,6 +17,55 @@ const LIMIAR_USUARIO = 0.08;
 const LIMIAR_AGENTE = 0.03;
 const SILENCIO_AGENTE_MS = 600;
 
+type EstadoTarefa = {
+  tarefa: Record<string, string | number | undefined>;
+  faltando: string[];
+  completa: boolean;
+  conversa: { quem: string; texto: string }[];
+};
+const CAMPOS: [string, string][] = [
+  ["produto", "Produto"],
+  ["quantidade", "Quantidade"],
+  ["unidade", "Unidade"],
+  ["prazo_entrega", "Entrega até"],
+  ["teto_total", "Teto total"],
+  ["local_entrega", "Local"],
+  ["observacoes", "Observações"],
+];
+function valorCampo(k: string, t: EstadoTarefa["tarefa"]) {
+  const v = t[k];
+  if (v === undefined) return undefined;
+  if (k === "teto_total") return `R$ ${Number(v).toLocaleString("pt-BR")}`;
+  if (k === "quantidade") return Number(v).toLocaleString("pt-BR");
+  if (k === "prazo_entrega") {
+    const d = new Date(`${v}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" });
+    return t.prazo_falado ? `${d} ("${t.prazo_falado}")` : d;
+  }
+  return String(v);
+}
+
+// A tarefa fica em memória no servidor; a página consulta a cada 500 ms
+// (mais simples que SSE e não sofre com buffer do túnel).
+function useTarefa() {
+  const [t, setT] = useState<EstadoTarefa | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    const tick = async () => {
+      try {
+        const r = await fetch("/api/tarefa", { cache: "no-store" });
+        if (vivo && r.ok) setT(await r.json());
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => {
+      vivo = false;
+      clearInterval(id);
+    };
+  }, []);
+  return t;
+}
+
 export default function Home() {
   const [estado, setEstado] = useState<"parado" | "conectando" | "conversando" | "encerrando">("parado");
   const [status, setStatus] = useState("");
@@ -199,11 +248,12 @@ export default function Home() {
   }, []);
 
   const resumoNavegador = resumir(latencias);
+  const tarefa = useTarefa();
 
   return (
     <main>
       <h1>Desenrola Agro</h1>
-      <p className="sub">Fase 1: conversa por voz em português com o agente da Agora.</p>
+      <p className="sub">Fale o que precisa comprar. O agente anota o pedido e pergunta o que faltar.</p>
 
       {estado === "parado" || estado === "conectando" ? (
         <button onClick={iniciar} disabled={estado === "conectando"}>
@@ -223,6 +273,39 @@ export default function Home() {
           <span className={`ind ${usuarioFalando ? "on" : ""}`}>Você</span>
           <span className={`ind ${agenteFalando ? "on" : ""}`}>Agente</span>
         </div>
+      )}
+
+      {tarefa && (
+        <section>
+          <h2>
+            Pedido{" "}
+            <span className={`ind ${tarefa.completa ? "on" : ""}`}>
+              {tarefa.completa ? "completo" : `falta: ${tarefa.faltando.join(", ")}`}
+            </span>
+          </h2>
+          <table>
+            <tbody>
+              {CAMPOS.map(([k, rotulo]) => {
+                const v = valorCampo(k, tarefa.tarefa);
+                return (
+                  <tr key={k}>
+                    <th>{rotulo}</th>
+                    <td className={v === undefined ? "nota" : ""}>{v ?? (tarefa.faltando.includes(k) ? "faltando" : "–")}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {tarefa.conversa.length > 0 && (
+            <div className="conversa">
+              {tarefa.conversa.map((f, i) => (
+                <p key={i}>
+                  <strong>{f.quem === "produtor" ? "Você" : "Agente"}:</strong> {f.texto}
+                </p>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       <section>
