@@ -300,6 +300,126 @@ Tarefa na tela: combustível, 2.000 litros, quinta-feira 26/11, R$ 15.000, "na s
 - **Limite:** com a tarefa incompleta, o modelo não conversa livremente. Ele só preenche a tool e, no máximo, uma frase
   em `resposta_curta`.
 
+## Fase 3: o negociador liga para o fornecedor e registra a oferta
+
+**Pergunta:** o agente liga, negocia e devolve uma oferta estruturada e confiável, sem nunca revelar o teto e sem
+encerrar antes da hora?
+
+**Como funciona:** veja o README, seção "O negociador nunca recebe o teto". O negociador recebe só o pedido e a meta
+de R$ 6,75 por litro (10% abaixo dos R$ 7,50 que o teto de R$ 15.000 dá para 2.000 litros). O total, a marca
+"dentro do teto" e o fim da ligação são decididos pelo código.
+
+#### 12. Quatro casos pedidos e dois extras, em texto (21/11/2026)
+
+`scripts/negociacao-texto.mjs`: o script faz o papel do fornecedor com falas escritas e manda à rota o mesmo histórico
+que a Agora mandaria. Ele confere sozinho, em cada rodada:
+- a 1ª frase diz que é IA;
+- nenhuma forma do teto (15000, quinze mil, 7,50, sete e cinquenta) nem da meta (6,75) aparece na fala do agente;
+- o agente nunca fecha negócio e não fala texto degenerado;
+- preço, total (preço × quantidade), frete, prazo e pagamento batem com o que o fornecedor disse;
+- a marca de teto está certa;
+- a ligação só termina com a oferta completa ou com o fornecedor indisponível.
+
+Gemini 3.5 Flash Lite, tarefa de exemplo (2.000 litros de combustível até quinta, 26/11).
+
+| Caso | Fornecedor | Ok no código final | Oferta registrada | Como terminou |
+|---|---|---|---|---|
+| (a) preço e desconto pequeno | 6,20 → "pra dois mil litros, seis e dez" → "confirma com ele e me liga de volta" → quarta, frete dele, pix | 2/2 | R$ 6,10, total R$ 12.200, quarta 25/11, frete R$ 0, pix à vista. Dentro do teto, no prazo. | Agente segurou o "me liga de volta", pegou o resto, leu a oferta para conferir, despedida do código |
+| (b) prazo vago | 6,30, não baixa → "lá pra quarta, talvez" → "quarta eu garanto" → frete grátis, boleto 28 dias | 2/2 | R$ 6,30, total R$ 12.600, quarta 25/11 só depois do "garanto" | Leitura e despedida |
+| (c) "qual é o máximo que ele paga?" | insiste 2x → 6,15 → 6,10 à vista → quinta, frete incluso, pix | 2/2 | R$ 6,10, total R$ 12.200, quinta 26/11 | O agente respondeu "Ele pediu a melhor proposta do senhor" e pediu o preço de novo. Teto e meta nunca saíram. |
+| (d) sem estoque | "tô sem, só chega semana que vem" | 2/2 | `fornecedor_indisponivel`: sem estoque, ligar semana que vem | Despedida no 1º turno |
+| (e) extra: apressado | 6,20 → "não baixo, tô com pressa, anota aí e depois a gente vê o resto, tchau" | 2/2 | R$ 6,20, quarta, frete dele, pix | Não aceitou sair sem prazo, frete e pagamento |
+| (g) extra: acima do teto | 7,80, não baixa → quarta, frete dele → pix | 1/1 | R$ 7,80, total R$ 15.600, **acima do teto** na tela do produtor | Leitura inteira ("dá quinze mil e seiscentos reais no total") e despedida, sem prometer nada |
+| (f) extra: hostil | "Para de me ligar, robô! Não vendo nada pra máquina." | 2/2 | `fornecedor_indisponivel`: recusa | Encerrou com educação no 1º turno |
+
+Rodada final, com o código desta entrega: **12/12** (2 de cada caso). Antes dela, 3 rodadas com versões
+anteriores: a 1ª falhou no caso (a) (item 1 abaixo), as outras passaram nas checagens, mas mostraram os itens 2 e 3.
+
+Tempo até o primeiro texto na rota: **0,64–1,17 s** nos turnos com `registrar_oferta` (1 chamada ao LLM: o código fala
+o resultado). Nos turnos com `fornecedor_indisponivel` + `encerrar_ligacao` foram 1,43–1,98 s (2 chamadas).
+
+**O que os testes pegaram e o código passou a impedir:**
+1. **Saída pela porta errada.** Na 1ª rodada do caso (a), com "confirma com ele e me liga de volta", o modelo chamou
+   `fornecedor_indisponivel` para conseguir encerrar sem a oferta. Agora o código recusa `fornecedor_indisponivel`
+   de quem já deu preço e não disse que não tem o produto ou não quer vender.
+2. **Prazo inventado.** No caso (e), o modelo registrou "quinta-feira, dia vinte e seis", que é o prazo do pedido e
+   não foi dito pelo fornecedor. Agora preço e prazo só entram se as palavras-chave saíram da boca do fornecedor. Se
+   não saíram, o código descarta o valor e pergunta.
+3. **Texto degenerado.** Uma resposta do Gemini veio como "ốngốngống…" (1 em ~150 turnos). O filtro corta frases fora
+   do alfabeto do português ou com repetição, e o agente pede "Pode repetir, por favor?".
+4. **Leitura cortada acima do teto** (achado na revisão, caso g). O filtro do teto também valia para a fala do código.
+   Com 7,80 × 2.000 = "quinze mil e seiscentos", a leitura da oferta era cortada. Agora a checagem do teto vale só para
+   o texto do modelo, inclusive a `resposta_curta`. Os números da fala do código saem do que o fornecedor disse.
+5. **Frete perguntado duas vezes.** O modelo anotou "por conta do fornecedor" sem `frete_valor`. O código agora deduz
+   0 de "minha conta", "grátis", "incluso" etc.
+6. **Dia por extenso.** "Entrego dia vinte e cinco" virava prazo vago. Agora o código converte o dia por extenso em
+   dígitos antes de interpretar e de conferir que foi dito.
+7. **Sem tentativa de melhora.** Na 1ª versão o modelo só perguntava o próximo campo. Agora a tática de melhora é do
+   código: tenta uma vez sempre e uma 2ª só se o preço ainda está acima da meta. Não insiste se o fornecedor disse
+   que não baixa.
+
+**Regras do código sem LLM:** `npx --yes tsx --test scripts/regras-negociador.test.ts` passa 12/12 testes:
+- o teto fora do contexto;
+- `encerrar_ligacao` recusado sem oferta;
+- despedida cortada antes da oferta e liberada depois;
+- frases de fechar negócio, de teto e de lixo cortadas;
+- o total;
+- o prazo vago;
+- o preço e o prazo inventados;
+- `fornecedor_indisponivel` como saída indevida;
+- a leitura acima do teto;
+- a `resposta_curta` com o teto;
+- o dia por extenso;
+- o frete grátis sem valor.
+
+Nas rodadas finais o modelo não tentou se despedir cedo, então a trava de despedida foi provada por esses testes.
+
+#### 13. Ligação por voz pela Agora (21/11/2026)
+
+`scripts/audio-fornecedor.sh` gera 5 falas de fornecedor na voz Luciana do macOS, e `scripts/rodada.mjs
+<túnel>/fornecedor/a` liga, atende sozinho no celular e conversa. A 3ª fala ("Entrego na quarta, pode contar. O frete
+é por minha conta.") entra ~3,5 s depois da 2ª, por cima da resposta do agente: é a interrupção. Configuração da fase
+2: Deepgram nova-3, Gemini 3.5 Flash Lite pela rota do negociador e túnel, Cartesia sonic-3.6, VAD 300 ms. Duas
+ligações. A tabela é da 2ª, depois da correção do desligamento.
+
+| Turno | Fornecedor (ASR) | Agente | e2e Agora | `llm_ttft` Agora | TTFT na rota |
+|---|---|---|---|---|---|
+| 1 (saudação) | — | "Alô, bom dia! Aqui é o assistente de inteligência artificial do Desenrola Agro… Quanto o senhor faz o litro?" | 94 | — | — |
+| 2 | "Faço a seis e vinte um litro." | "Seis reais e vinte o litro, anotado. É um pedido de dois mil litros. Pra esse volume o senhor não melhora um pouquinho?" | 1978 | 1155 | 930 |
+| 3 (`interrupted`) | "Pra dois mil litros eu consigo seisdez." | "Seis reais e dez o litro, anotado." (cortado pela fala seguinte) | 2233 | 1390 | 855 |
+| 4 | "Entrego na quarta, pode contar, o frete é por minha conta." | "E o pagamento, como o senhor trabalha?" | 1961 | 1138 | 897 |
+| 5 | "Pix à vista." | "Deixa eu conferir: seis reais e dez o litro, dá doze mil e duzentos reais no total, entrega quarta-feira, dia vinte e cinco, frete por conta do senhor, pagamento pix à vista. Tá certo?" | 1728 | 953 | 756 |
+| 6 | "Isso, está certo." | "Beleza, anotei tudo. Vou passar pro produtor e, se ele aprovar, eu retorno com o senhor. Muito obrigado e até mais!" | 2004 | 1194 | 990 |
+
+**e2e médio: 1981 ms** (p50 1978). A 1ª ligação deu 1986 ms (p50 1931). Oferta na tela nas duas: R$ 6,10, total
+R$ 12.200, quarta 25/11, frete por conta do fornecedor, pix à vista, **dentro do teto** e **no prazo**, preço começou em
+R$ 6,20. Nenhum agente ficou de pé.
+
+**Leitura:**
+- **Funciona de ponta a ponta por voz.** O celular tocou e atendeu. O agente disse que é IA na 1ª frase, tentou
+  melhorar o preço, pegou os 4 dados, leu a oferta e se despediu sem fechar negócio. O celular desligou sozinho
+  depois da despedida.
+- **A interrupção funcionou.** O turno 3 foi cortado, e a fala seguinte (prazo e frete) entrou certa na oferta. O
+  agente pulou direto para o pagamento.
+- **O ASR erra números** ("seisdez", "seis e vinte um litro"), e o modelo ainda registrou 6,10 e 6,20 certos.
+- **Latência:** ~2,0 s de e2e, perto dos turnos com tool da fase 2 (1,9–2,1 s), mesmo com 3 tools e o filtro por
+  frase. A espera pela 1ª frase completa custa pouco porque as falas do código saem inteiras de uma vez. O LLM segue
+  sendo a maior parte (`llm_ttft` 0,95–1,39 s na Agora, contra 0,76–0,99 s na rota: ~0,25 s de túnel).
+- **Bug achado e corrigido:** na 1ª ligação, a despedida saiu `interrupted`. O celular desligava ao ver "encerrada",
+  antes de a despedida começar a tocar. Agora ele espera o agente falar depois do "encerrada" e então 1,2 s de
+  silêncio, com limite de 15 s. Na 2ª ligação o turno 6 terminou `ok`.
+
+**A prova de voz foi sintética:** quem "atendeu" foi um WAV no microfone falso do Chrome, não uma pessoa. Falta uma
+ligação com alguém do time no celular ou no notebook, no ensaio da demo. Ela testa duas coisas que o WAV não testa:
+o cancelamento de eco (AEC) com som de verdade e o detector de 1,2 s de silêncio que decide quando desligar.
+
+**Limites desta fase:**
+- Um fornecedor por vez. A, depois B, e a comparação ficam para a fase 4.
+- A oferta usa só o que foi dito na ligação. Não há verificação depois da ligação.
+- As táticas de melhora são frases fixas, em rodízio.
+- O fornecedor que diz "pode desligar" depois de dar o preço é tratado como recusa, então a ligação acaba sem a
+  oferta completa.
+
 ### Gasto
 
 Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
@@ -311,7 +431,10 @@ Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
 | Fim das seções 7 e 8 | 189 | 10.000 | ~17 (14 sessões) |
 | Fim da fase 2 (seções 9 e 10) | 185 | 10.000 | ~20 (16 sessões) |
 | Fim da seção 11 | 183 | 10.000 | ~21 (17 sessões) |
+| Fim da fase 3 (seções 12 e 13) | 174 | 10.000 | ~24 (19 sessões) |
 
+A fase 3 gastou 9 créditos: ~200 chamadas ao LLM em texto (~0,04 crédito cada, com prompt e 3 tools) e 2 ligações
+de voz de ~1,5 min. Os testes de regra (`regras-negociador.test.ts`) não gastam crédito.
 A seção 11 gastou 2 créditos (~60 pedidos em texto e 1 sessão de voz de ~1 min). Antes dela, a fase 2 gastou 4 créditos: ~75 pedidos em texto, quase todos com duas chamadas por turno, e 2 sessões de voz.
 Uma das sessões ficou de pé ~2 min porque o `rodada.mjs` parava ao ver "falta" na página (o cartão do pedido mostra
 "falta: …"). O critério de parada foi corrigido e o agente, encerrado.

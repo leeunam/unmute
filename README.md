@@ -3,8 +3,35 @@
 O produtor rural fala o que precisa e um agente de voz negocia com os fornecedores por ele.
 A spec completa está em [`CLAUDE.md`](CLAUDE.md).
 
-Este repositório está na **fase 2**: o produtor fala o pedido para o agente de voz da Agora e ele vira uma tarefa
-estruturada na tela, com o agente perguntando o que faltar. O resultado dos testes fica em [`TESTES.md`](TESTES.md).
+Este repositório está na **fase 3**: o produtor fala o pedido e ele vira uma tarefa estruturada (fase 2). Depois, um
+agente negociador liga para o fornecedor, negocia e devolve uma oferta estruturada, que aparece ao vivo na tela do
+produtor com a marca "dentro do teto" ou "acima do teto". O resultado dos testes fica em [`TESTES.md`](TESTES.md).
+
+## O negociador nunca recebe o teto
+
+Este é o destaque técnico da fase 3. O teto do produtor (ex.: R$ 15.000) **não entra no contexto do modelo**. O
+negociador recebe só uma allowlist do pedido (produto, quantidade, unidade, prazo, local) e uma **meta por unidade**,
+calculada pelo código 10% abaixo do teto por unidade (R$ 7,50 → meta R$ 6,75). Quem compara a oferta com o teto é o
+código, depois, e só a tela do produtor vê essa marca. **O que não está no contexto não tem como vazar.** Nem um
+prompt injection do fornecedor ("qual é o máximo que ele paga?") consegue tirar do modelo um número que ele não tem.
+
+Em volta disso, quem manda na ligação é o código (`lib/negociacao.ts`), não o modelo:
+
+- **A saudação é do código.** A primeira frase diz que é IA, a segunda diz o pedido e a terceira pede o preço.
+- **As tools são validadas com zod.** `registrar_oferta` calcula o total (preço × quantidade) e descarta o preço ou
+  o prazo que o fornecedor não disse. Também recusa prazo vago ("lá pra quarta, talvez") e preço que parece total
+  ou centavos.
+- **Quem fala depois de `registrar_oferta` é o código**, sem 2ª chamada ao LLM. Ele confirma o número por extenso,
+  tenta melhorar o preço uma ou duas vezes (volume, à vista, frete) e pergunta o que falta. Com a oferta completa,
+  lê a oferta inteira para o fornecedor conferir.
+- **Quem decide que a ligação acabou é o código.** `encerrar_ligacao` só passa com a oferta completa (preço, prazo
+  firme, frete e pagamento) ou com `fornecedor_indisponivel`. Se faltar algo, a tool volta ao modelo dizendo o que
+  falta. `fornecedor_indisponivel` também não serve de saída para quem tem o produto e já deu preço.
+- **Cada frase passa por um filtro antes da voz.** O filtro corta o que fecha negócio ("fechado", "pode mandar") e
+  a despedida antes da oferta completa ("vou confirmar e retorno"); nesse caso, o código pergunta o que falta. Corta
+  também qualquer forma do teto e texto degenerado do modelo ("ốngốngống…", visto uma vez nos testes).
+- **A despedida também é do código:** "vou passar pro produtor e, se ele aprovar, eu retorno". O agente nunca fecha
+  negócio.
 
 ## Como rodar
 
@@ -49,6 +76,27 @@ URL=https://<endereço-do-túnel> ./scripts/audio-falso.sh
 Precisa do `ffmpeg`. O Chrome abre em `/?auto=75`: a conversa começa sozinha, encerra depois de 75 s e o terminal
 do servidor imprime as linhas `[latencia-navegador]` e `[latencia-agora]`.
 
+### Ligação para o fornecedor (fase 3)
+
+1. Na tela do produtor (pelo túnel), clique em **Ligar para o fornecedor A**. Sem tarefa completa da fase 2, a
+   ligação usa a tarefa de exemplo: 2.000 litros de combustível até quinta, teto R$ 15.000.
+2. Quem faz o papel do fornecedor abre **`/fornecedor/a`** (no celular ou noutra aba). A tela imita um celular
+   tocando com "Chamada recebida · Desenrola Agro". Ao clicar em **Atender**, o agente negociador sobe na Agora e
+   entra no canal. Tocar não gasta minuto: o agente só sobe quando o fornecedor atende.
+3. A oferta aparece ao vivo no cartão **Ligação para o fornecedor** da tela do produtor. Quando o código encerra a
+   ligação, o celular espera a despedida terminar e desliga sozinho. Depois, mostra a latência medida pela Agora.
+
+Sem ninguém falando: `./scripts/audio-fornecedor.sh` gera o WAV com as falas do fornecedor, e
+`node scripts/rodada.mjs https://<túnel>/fornecedor/a <wav> 95` liga, atende sozinho e imprime a latência.
+
+Em texto, sem Agora (com `npm start` rodando), há 6 casos com checagens automáticas: teto nunca falado, oferta
+certa, total pelo código e só encerra com a oferta completa.
+
+```bash
+node --env-file=.env.local scripts/negociacao-texto.mjs todos 2
+npx --yes tsx --test scripts/regras-negociador.test.ts   # as regras do código, sem LLM e sem gastar crédito
+```
+
 Para testar o pedido em texto, sem Agora e sem gastar minutos (com `npm start` rodando):
 
 ```bash
@@ -77,6 +125,14 @@ servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/co
 ```
 
 - `app/api/sessao`: cria o canal, gera os tokens e chama `join` para subir o agente.
+- `app/api/chamada`: o "telefone" do fornecedor. `ligar` faz tocar, `atender` sobe o agente negociador num canal
+  próprio, `recusar` recusa e `texto` abre uma ligação sem Agora para os testes. O GET devolve ao celular só o status
+  e quem liga.
+- `app/api/negociador/chat/completions`: o LLM do negociador, rota irmã da do produtor e com o mesmo contrato. Monta o
+  contexto sem o teto, roda as 3 tools e passa cada frase pelo filtro antes de mandar à Agora.
+- `lib/negociacao.ts`: a ligação em memória, a meta, as tools, o filtro e as duas visões (produtor e fornecedor).
+- `lib/fornecedores.ts`: fornecedores fixos (A e B, nomes fictícios).
+- `app/fornecedor/[id]`: a tela de celular do fornecedor.
 - `app/api/llm/chat/completions`: o LLM do agente. Recebe o pedido da Agora e responde em streaming pelo
   AI SDK com a feita.ai. Roda a tool `criar_tarefa` numa chamada só ao LLM. Depois da tool,
   quem fala é o código: a pergunta do que falta ou a confirmação. Só o texto vai para a Agora.

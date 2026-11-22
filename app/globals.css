@@ -49,3 +49,31 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line
 pre { overflow-x: auto; font-size: 12px; }
 .conversa { margin-top: 12px; font-size: 14px; }
 .conversa p { margin: 4px 0; }
+
+/* Celular do fornecedor (/fornecedor/[id]) */
+.celular-pagina { display: flex; flex-direction: column; align-items: center; }
+.celular {
+  width: 300px; min-height: 520px; border-radius: 40px; padding: 48px 24px 32px;
+  background: #101612; color: #f2f5f2; border: 8px solid #2a2f2b;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.cel-rotulo { margin: 0 0 24px; color: #a9b5ab; font-size: 15px; }
+.cel-avatar {
+  width: 96px; height: 96px; border-radius: 50%; background: var(--accent);
+  display: grid; place-items: center; font-size: 32px; font-weight: 700; color: #fff;
+}
+.celular.tocando .cel-avatar, .cel-avatar.falando { animation: pulso 1.2s ease-in-out infinite; }
+@keyframes pulso { 0%, 100% { box-shadow: 0 0 0 0 rgba(92, 191, 106, 0.6); } 50% { box-shadow: 0 0 0 18px rgba(92, 191, 106, 0); } }
+@media (prefers-reduced-motion: reduce) { .celular.tocando .cel-avatar, .cel-avatar.falando { animation: none; } }
+.cel-nome { margin: 16px 0 0; font-size: 24px; font-weight: 600; }
+.cel-desc { margin: 0; color: #a9b5ab; font-size: 14px; text-align: center; }
+.cel-botoes { margin-top: auto; display: flex; gap: 40px; }
+.cel-botoes button { width: 76px; height: 76px; padding: 0; border-radius: 50%; font-size: 13px; }
+.cel-atender { background: #2f9e44; }
+.cel-recusar { background: #d6402b; }
+.marca { padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; }
+.marca.ok { background: rgba(47, 125, 59, 0.15); color: var(--accent); }
+.marca.ruim { background: rgba(179, 65, 46, 0.15); color: var(--danger); }
+.acoes { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+button.secundario { font-size: 15px; padding: 10px 18px; }
+a { color: var(--accent); }
