@@ -1,10 +1,19 @@
 // LLM customizado que a Agora chama (contrato OpenAI Chat Completions com SSE):
 // https://docs.agora.io/en/ai/build/custom-model-integration/custom-llm
-// Por dentro usa o AI SDK (streamText) com a feita.ai. Aqui entram tools,
-// estado e logs nas próximas fases.
-import { streamText, type ModelMessage } from "ai";
+// Por dentro usa o AI SDK (streamText) com a feita.ai. A tool criar_tarefa
+// roda aqui, em vários passos; a Agora só recebe o texto em streaming.
+import { isStepCount, streamText, tool, type ModelMessage } from "ai";
 import { NextRequest } from "next/server";
 import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
+import {
+  aplicarCriarTarefa,
+  criarTarefaSchema,
+  estadoParaPrompt,
+  estado,
+  PROMPT_PRODUTOR,
+  proximaPergunta,
+  registrarConversa,
+} from "@/lib/tarefa";
 
 type OpenAIMessage = { role: string; content: unknown };
 
@@ -28,8 +37,17 @@ function paraAiSdk(messages: OpenAIMessage[]) {
     if (m.role === "system") sistema.push(content);
     else if (m.role === "user" || m.role === "assistant") conversa.push({ role: m.role, content });
   }
-  return { instructions: sistema.join("\n\n") || undefined, messages: conversa };
+  // Prompt da Agora + regras do pedido + estado da tarefa (o modelo não vê as tool calls antigas).
+  sistema.push(PROMPT_PRODUTOR, estadoParaPrompt());
+  return { instructions: sistema.join("\n\n"), messages: conversa };
 }
+
+const criarTarefa = tool({
+  description:
+    "Anota ou atualiza o pedido de compra do produtor. Mande só os campos que ele disse agora. O sistema diz o que falta ou devolve a confirmação pronta.",
+  inputSchema: criarTarefaSchema,
+  execute: async (entrada) => aplicarCriarTarefa(entrada),
+});
 
 export async function POST(req: NextRequest) {
   const t0 = performance.now();
@@ -44,9 +62,22 @@ export async function POST(req: NextRequest) {
   const created = Math.floor(Date.now() / 1000);
   const turno = body.turn_id ?? "?";
 
+  const entrada = paraAiSdk(body.messages ?? []);
+  registrarConversa(
+    entrada.messages.map((m) => ({ quem: m.role === "user" ? "produtor" : "agente", texto: String(m.content) })),
+  );
+  const passos: string[] = [];
+  const forcarTool = !estado().completa;
   const result = streamText({
     model: feita.chatModel(modelo),
-    ...paraAiSdk(body.messages ?? []),
+    ...entrada,
+    tools: { criar_tarefa: criarTarefa },
+    // O código decide, não o modelo: enquanto a tarefa estiver incompleta, o modelo é
+    // obrigado a chamar criar_tarefa (sem isso o Nemotron pulava a tool e inventava o
+    // produto). Um passo só: quem fala depois da tool é o código (resultado.fala), sem
+    // a segunda chamada ao LLM. Economiza ~0,5–0,7 s por turno com tool.
+    toolChoice: forcarTool ? "required" : "auto",
+    stopWhen: isStepCount(1),
     maxOutputTokens: body.max_tokens ?? 300,
     abortSignal: req.signal,
     providerOptions: { feita: { reasoning: feitaReasoning(modelo) } } as never,
@@ -69,13 +100,36 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let primeiro = 0;
       let resposta = "";
+      let falaTool = "";
+      const falar = (texto: string) => {
+        if (!primeiro) primeiro = performance.now();
+        resposta += texto;
+        controller.enqueue(chunk({ content: texto }, null));
+      };
       try {
         controller.enqueue(chunk({ role: "assistant" }, null));
-        for await (const delta of result.textStream) {
-          if (!primeiro) primeiro = performance.now();
-          resposta += delta;
-          controller.enqueue(chunk({ content: delta }, null));
+        for await (const part of result.fullStream) {
+          const ms = Math.round(performance.now() - t0);
+          if (part.type === "finish-step") passos.push(`fim_passo@${ms}`);
+          if (part.type === "tool-call") passos.push(`tool@${ms} ${JSON.stringify(part.input)}`);
+          if (part.type === "error") console.error("[llm] erro no stream", part.error);
+          if (part.type === "tool-result") {
+            passos.push(`resultado ${JSON.stringify(part.output)}`);
+            falaTool = (part.output as { fala?: string }).fala ?? falaTool;
+          }
+          // Com a tool obrigatória, texto do modelo seria narração: não vai para a voz.
+          if (part.type !== "text-delta" || !part.text || forcarTool) continue;
+          falar(part.text);
         }
+        if (falaTool) falar(resposta ? ` ${falaTool}` : falaTool);
+        else if (forcarTool) falar(proximaPergunta());
+        registrarConversa([
+          ...entrada.messages.map((m) => ({
+            quem: m.role === "user" ? ("produtor" as const) : ("agente" as const),
+            texto: String(m.content),
+          })),
+          { quem: "agente", texto: resposta },
+        ]);
         controller.enqueue(chunk({}, "stop"));
         controller.enqueue(enc.encode("data: [DONE]\n\n"));
       } catch (err) {
@@ -84,7 +138,7 @@ export async function POST(req: NextRequest) {
         controller.close();
         const ttft = primeiro ? Math.round(primeiro - t0) : -1;
         console.log(
-          `[llm] turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(resposta)}`,
+          `[llm] turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(resposta)} passos=${JSON.stringify(passos)}`,
         );
       }
     },

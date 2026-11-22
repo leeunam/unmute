@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startAgent, USER_UID, userRtcToken } from "@/lib/agora";
+import { resetar } from "@/lib/tarefa";
 
 // Cria um canal novo, gera o token do navegador e sobe o agente da Agora nele.
 export async function POST(req: NextRequest) {
@@ -9,6 +10,7 @@ export async function POST(req: NextRequest) {
   const origin = `${proto}://${host}`;
   console.log("[sessao] origin", origin);
   const channel = `desenrola-${Date.now()}`;
+  resetar();
   try {
     const token = userRtcToken(channel);
     const agent = await startAgent(channel, origin);

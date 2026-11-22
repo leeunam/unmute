@@ -28,7 +28,8 @@ try {
   page.on("pageerror", (e) => console.log(`[pageerror] ${e.message}`));
   await page.goto(`${url}/?auto=${segundos}`, { waitUntil: "networkidle2" });
   await page.waitForFunction(
-    () => /Sessão encerrada|Falta|erro/i.test(document.body.innerText) && !/Buscando/.test(document.body.innerText),
+    // .erro em vez de procurar "falta" no texto: o cartão do pedido mostra "faltando".
+    () => (/Sessão encerrada/.test(document.body.innerText) || !!document.querySelector(".erro")) && !/Buscando/.test(document.body.innerText),
     { timeout: (Number(segundos) + 60) * 1000, polling: 1000 },
   );
   if (saidaAudio) {
