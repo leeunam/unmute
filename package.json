@@ -12,12 +12,19 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.94",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tailwindcss/postcss": "^4.3.5",
     "agora-rtc-sdk-ng": "^4.24.10",
     "agora-token": "^2.0.7",
     "ai": "^7.0.179",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "motion": "^14.14.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.1",
+    "tailwindcss": "^4.3.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

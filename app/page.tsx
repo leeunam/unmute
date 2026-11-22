@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { resumir, type Resumo } from "@/lib/resumo";
 import type { IAgoraRTCClient, IMicrophoneAudioTrack, IRemoteAudioTrack } from "agora-rtc-sdk-ng";
+import { Plant } from "@phosphor-icons/react/dist/ssr";
+import { ChamadaHero } from "@/components/produtor/chamada-hero";
+import { ConversaAoVivo } from "@/components/produtor/conversa-ao-vivo";
+import { CartaoPedido } from "@/components/produtor/cartao-pedido";
+import { CartaoLatencia } from "@/components/produtor/cartao-latencia";
 
 type Sessao = { appId: string; channel: string; uid: number; token: string; agentId: string };
 type Turnos = {
@@ -371,123 +376,50 @@ export default function Home() {
   const tarefa = useTarefa();
 
   return (
-    <main>
-      <h1>Desenrola Agro</h1>
-      <p className="sub">Fale o que precisa comprar. O agente anota o pedido e pergunta o que faltar.</p>
-
-      {estado === "parado" || estado === "conectando" ? (
-        <button onClick={iniciar} disabled={estado === "conectando"}>
-          {estado === "conectando" ? "Conectando…" : "Falar com o agente"}
-        </button>
-      ) : (
-        <button className="parar" onClick={encerrar} disabled={estado === "encerrando"}>
-          Encerrar conversa
-        </button>
-      )}
-
-      <p className="status">{status}</p>
-      {erro && <p className="erro">{erro}</p>}
-
-      {estado === "conversando" && (
-        <div className="indicadores">
-          <span className={`ind ${usuarioFalando ? "on" : ""}`}>Você</span>
-          <span className={`ind ${agenteFalando ? "on" : ""}`}>Agente</span>
+    <main className="tela mx-auto max-w-[1360px] px-6 pt-10 pb-16 xl:px-10">
+      <header className="mb-8 flex items-center gap-3">
+        <span className="grid size-10 place-items-center rounded-xl bg-surface-accent text-primary-ink">
+          <Plant weight="duotone" className="size-6" />
+        </span>
+        <div>
+          <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.015em]">Desenrola Agro</h1>
+          <p className="text-sm text-muted-foreground">Fale o que precisa comprar. O agente anota o pedido e pergunta o que faltar.</p>
         </div>
-      )}
+      </header>
 
-      {tarefa && (
-        <section>
-          <h2>
-            Pedido{" "}
-            <span className={`ind ${tarefa.completa ? "on" : ""}`}>
-              {tarefa.completa ? "completo" : `falta: ${tarefa.faltando.join(", ")}`}
-            </span>
-          </h2>
-          <table>
-            <tbody>
-              {CAMPOS.map(([k, rotulo]) => {
-                const v = valorCampo(k, tarefa.tarefa);
-                return (
-                  <tr key={k}>
-                    <th>{rotulo}</th>
-                    <td className={v === undefined ? "nota" : ""}>{v ?? (tarefa.faltando.includes(k) ? "faltando" : "–")}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {tarefa.conversa.length > 0 && (
-            <div className="conversa">
-              {tarefa.conversa.map((f, i) => (
-                <p key={i}>
-                  <strong>{f.quem === "produtor" ? "Você" : "Agente"}:</strong> {f.texto}
-                </p>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:gap-8">
+        <div className="space-y-6">
+          <ChamadaHero
+            estado={estado}
+            usuarioFalando={usuarioFalando}
+            agenteFalando={agenteFalando}
+            status={status}
+            erro={erro}
+            onIniciar={iniciar}
+            onEncerrar={encerrar}
+          />
+          <ConversaAoVivo falas={tarefa?.conversa ?? []} />
+        </div>
 
-      {tarefa && <CartaoLigacao l={tarefa.ligacao} />}
-
-      <section>
-        <h2>Latência no navegador</h2>
-        <p className="nota">
-          Do último som da sua fala até o primeiro som do agente. Inclui a rede e o silêncio que o agente espera para
-          saber que você terminou.
-        </p>
-        {resumoNavegador ? (
-          <>
-            <p>
-              <strong>Média {resumoNavegador.media_ms} ms</strong> · p50 {resumoNavegador.p50_ms} ms · p90{" "}
-              {resumoNavegador.p90_ms} ms · máx {resumoNavegador.max_ms} ms · {resumoNavegador.n} respostas
-            </p>
-            <p className="nota">Cada resposta: {latencias.join(", ")} ms</p>
-          </>
-        ) : (
-          <p className="nota">Nenhuma resposta medida ainda.</p>
-        )}
-      </section>
-
-      {turnos && (
-        <section>
-          <h2>Latência medida pela Agora</h2>
-          {turnos.resumo ? (
-            <p>
-              <strong>Média {turnos.resumo.media_ms} ms</strong> · p50 {turnos.resumo.p50_ms} ms · p90{" "}
-              {turnos.resumo.p90_ms} ms · máx {turnos.resumo.max_ms} ms · {turnos.resumo.n} turnos de voz
-            </p>
-          ) : (
-            <p className="nota">Nenhum turno de voz com métrica.</p>
-          )}
-          <table>
-            <thead>
-              <tr>
-                <th>Turno</th>
-                <th>Início</th>
-                <th>Fim</th>
-                <th>Total</th>
-                <th>Partes (ms)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {turnos.turnos.map((t) => (
-                <tr key={t.turno}>
-                  <td>{t.turno}</td>
-                  <td>{t.inicio}</td>
-                  <td>{t.fim}</td>
-                  <td>{t.e2e_ms ?? "–"}</td>
-                  <td>
-                    {Object.entries(t.segmentos)
-                      .map(([k, v]) => `${k} ${v}`)
-                      .join(" · ")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
+        <div className="space-y-6">
+          <CartaoPedido
+            completa={tarefa?.completa ?? false}
+            campos={
+              tarefa
+                ? CAMPOS.map(([k, rotulo]) => ({
+                    chave: k,
+                    rotulo,
+                    valor: valorCampo(k, tarefa.tarefa),
+                    faltando: tarefa.faltando.includes(k),
+                    largo: k === "prazo_entrega" || k === "local_entrega" || k === "observacoes",
+                  }))
+                : null
+            }
+          />
+          {tarefa && <CartaoLigacao l={tarefa.ligacao} />}
+          <CartaoLatencia navegador={resumoNavegador} agora={turnos} />
+        </div>
+      </div>
     </main>
   );
 }
