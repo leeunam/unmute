@@ -108,18 +108,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { msgs, semFala, ajustes } = conversa(l, body.messages ?? []);
+  // O fornecedor não disse nada que deu para usar (ex.: logo depois de uma interrupção): pede para repetir,
+  // antes de mexer no estado da ligação. Sem isso, o histórico termina numa fala do agente e o Gemini recusa (400).
+  if (semFala) {
+    console.log(`[negociador] fornecedor=${l.fornecedor.id} turno=${turno} sem_fala historico=${JSON.stringify(ajustes)}`);
+    return resposta(async (falar) => falar(SEM_FALA));
+  }
   const ultima = msgs.at(-1);
   l.ultima_fala_fornecedor = ultima?.role === "user" ? String(ultima.content) : "";
   l.falas_fornecedor = msgs.filter((m) => m.role === "user").map((m) => String(m.content)).join(" ");
   if (l.oferta.completa) l.turnos_com_oferta_completa++;
   const passos: string[] = [];
-
-  // O fornecedor não disse nada que deu para usar (ex.: logo depois de uma interrupção): pede para repetir.
-  // Sem isso, o histórico termina numa fala do agente e o Gemini recusa (400).
-  if (semFala) {
-    console.log(`[negociador] fornecedor=${l.fornecedor.id} turno=${turno} sem_fala historico=${JSON.stringify(ajustes)}`);
-    return resposta(async (falar) => falar(SEM_FALA));
-  }
 
   // "Qual o máximo que ele paga?": o negociador não sabe (o teto não está no contexto). Quem responde é o
   // código, sem LLM, para o modelo não inventar ("ele não estipulou limite"). Regra 4.

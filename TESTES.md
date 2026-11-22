@@ -594,8 +594,9 @@ pela Agora com o filler de 1000 ms (`audio-demo.sh`, perna do produtor e ligaç�
 na rota do produtor (Gemini 3.5 Flash Lite, 6 mensagens, `tool_choice: required`).
 
 **Causa, confirmada direto no gateway:** o Gemini recusa histórico que **termina numa fala do agente** e fala do
-usuário **só com espaço**. Depois da interrupção, a fala do usuário veio vazia, a rota a descartava e o histórico
-terminava em assistant: sistema + saudação + 2 trocas + fala do agente = as 6 mensagens do log.
+usuário **só com espaço**. As 6 mensagens do log cabem nas duas formas: com a saudação no histórico e a fala vazia
+do usuário descartada pela rota (termina em assistant), ou sem a saudação e com a fala do usuário só com espaço,
+que a rota antiga mantinha. O gateway recusa as duas, e a correção cobre as duas.
 
 | Histórico no gateway | Gemini | Nemotron |
 |---|---|---|
@@ -623,8 +624,12 @@ terminava em assistant: sistema + saudação + 2 trocas + fala do agente = as 6 
 - `fluxo-texto.mjs 1`: a compra inteira até FECHADA com A. `negociacao-texto.mjs todos`: 7 de 7 casos ok.
 - Voz pela Agora: o produtor interrompe a confirmação no meio ("Espera, espera") e depois diz "pode ligar". Os
   turnos 3 e 4 terminaram `interrupted`, a agente retomou e a compra começou, sem erro e sem FAILURE. A ligação A
-  também: oferta completa e turno 3 `interrupted`. Nessas rodadas a Agora não mandou fala vazia, então o caso
-  exato do dono foi provado em texto e no gateway, não em voz.
+  também: oferta completa e turno 3 `interrupted`. Mais uma rodada com um ruído de 0,4 s (`anoisesrc`) por cima da
+  confirmação: a Agora não interrompeu nem chamou o LLM. `conversa-texto.mjs`: pedido completo em 3 turnos.
+  Em nenhuma rodada de voz a Agora mandou fala vazia, então o caso exato do dono foi provado em texto e no gateway,
+  não em voz.
+- Limite da 2ª tentativa: no negociador, o Nemotron às vezes não chama `registrar_oferta` ("Posso anotar esse
+  preço?"); a oferta entra no turno seguinte, com o Gemini. Só acontece quando o gateway falha.
 
 ### Gasto
 
