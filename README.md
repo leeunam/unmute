@@ -69,17 +69,7 @@ Na demo, os fornecedores são simulados por pessoas numa tela que imita o celula
 
 ## Como usamos a Agora
 
-```mermaid
-flowchart LR
-  P["🧑‍🌾 Produtor<br/>navegador"] -- "voz em tempo real<br/>(Agora RTC)" --> E
-  F["📱 Fornecedor A e B<br/>tela de celular"] -- "voz em tempo real<br/>(Agora RTC)" --> E
-  subgraph E["Agora Conversational AI Engine"]
-    direction TB
-    O["👂 Ouve<br/>Deepgram nova-3 · pt-BR"] --> T["🧠 Pensa<br/>chama o nosso servidor"] --> V["🗣️ Fala<br/>Cartesia sonic-3.6 · voz Alice"]
-  end
-  T -- "chat da OpenAI<br/>com streaming" --> R["Nossas rotas de LLM<br/>Next.js + Vercel AI SDK<br/>tools, regras e estado"]
-  R --> G["Gateway da feita.ai<br/>Gemini 3.5 Flash Lite"]
-```
+![Arquitetura: a Agora cuida da voz (ouve com Deepgram, fala com Cartesia) e chama o nosso servidor, onde o código garante as regras, que usa o Gemini pela feita.ai](docs/arquitetura.png)
 
 A Agora cuida de tudo o que é voz: ouvir, perceber quando a pessoa terminou de falar, lidar com a interrupção, preencher a pausa com um "hum, deixa eu ver" quando o modelo demora e falar de volta. O raciocínio fica com a gente. A Agora chama as nossas rotas de LLM no formato de chat da OpenAI, com streaming, e é ali que rodam as tools, as regras de negócio e o estado da conversa.
 
@@ -191,6 +181,7 @@ O Aegro mostra preços de notas fiscais passadas. Na Agrofy, o produtor pede cot
 | Todas as medições e testes, com data | [`TESTES.md`](TESTES.md) |
 | Gravações das vozes testadas e do "hum" | [`amostras/`](amostras) |
 | Spec original do produto, usada para guiar os agentes de código | [`CLAUDE.md`](CLAUDE.md) |
+| Diagrama da arquitetura (imagem e o HTML de onde ela saiu) | [`docs/arquitetura.png`](docs/arquitetura.png) · [`docs/arquitetura.html`](docs/arquitetura.html) |
 | Código | `app/` (telas e rotas de API), `lib/` (regras: tarefa, negociação, comparação), `components/` (interface), `scripts/` (testes e deploy) |
 
 ## Stack e como rodar
