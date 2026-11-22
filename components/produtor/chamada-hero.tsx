@@ -100,7 +100,7 @@ export function ChamadaHero({ estado, usuarioFalando, agenteFalando, status, err
         </div>
       </div>
       {erro ? (
-        <p className="mt-5 rounded-xl bg-status-danger-bg px-4 py-3 text-sm break-words whitespace-pre-wrap text-status-danger-ink">
+        <p className="erro mt-5 rounded-xl bg-status-danger-bg px-4 py-3 text-sm break-words whitespace-pre-wrap text-status-danger-ink">
           {erro}
         </p>
       ) : null}
