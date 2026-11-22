@@ -78,7 +78,8 @@ servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/co
 
 - `app/api/sessao`: cria o canal, gera os tokens e chama `join` para subir o agente.
 - `app/api/llm/chat/completions`: o LLM do agente. Recebe o pedido da Agora e responde em streaming pelo
-  AI SDK com a feita.ai. Roda a tool `criar_tarefa` em dois passos e só manda o texto para a Agora.
+  AI SDK com a feita.ai. Roda a tool `criar_tarefa` numa chamada só ao LLM. Depois da tool,
+  quem fala é o código: a pergunta do que falta ou a confirmação. Só o texto vai para a Agora.
 - `lib/tarefa.ts`: a tarefa em memória. Valida o que falta, transforma o prazo falado em data e monta a
   confirmação com números por extenso. Quem decide se a tarefa está completa é este código, não o modelo.
 - `app/api/tarefa`: GET devolve a tarefa e a conversa para a página; POST zera.
