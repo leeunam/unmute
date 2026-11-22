@@ -169,7 +169,7 @@ function ttsConfig() {
   throw new Error(`TTS_VENDOR inválido: ${vendor}. Use "cartesia", "minimax" ou "feita".`);
 }
 
-const FILLER_WAIT_MS = Number(process.env.FILLER_WAIT_MS ?? 700);
+const FILLER_WAIT_MS = Number(process.env.FILLER_WAIT_MS ?? 1000);
 
 export function joinBody(channel: string, origin: string, perfil: Perfil = PRODUTOR) {
   return {

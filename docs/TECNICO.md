@@ -172,7 +172,7 @@ servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/co
 - `app/api/encerrar`: chama `leave`.
 - `app/api/latencia`: chama `turns` e resume a latência dos turnos de voz.
 - `lib/agora.ts`: toda a configuração do agente (prompt, ASR, LLM, TTS, detecção de fim de fala e o `filler_words`,
-  que fala "Hum, deixa eu ver." quando a nossa rota demora mais de 700 ms para mandar texto).
+  que fala "Hum, deixa eu ver." quando a nossa rota demora mais de 1 s para mandar texto).
 
 ## Visual das telas
 

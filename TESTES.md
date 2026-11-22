@@ -580,10 +580,11 @@ A Agora tem o recurso nativo `properties.filler_words`: se o LLM não manda text
 uma frase curta da lista, no máximo uma por turno, e a resposta vem depois. A doc não diz se funciona com LLM
 custom, então foi testado: **funciona com a nossa rota.** Nenhum código na rota. Frases em rodízio: "Hum, deixa
 eu ver.", "Só um instante.", "Hum, só um minutinho.", "Deixa eu ver aqui.", "Hum, um momento.".
-Limiar padrão de 700 ms (`FILLER_WAIT_MS`, `0` desliga). **Na prática, todo turno que passa pelo LLM ganha filler:**
-8 de 8 nas duas pernas medidas, porque a nossa rota leva 0,7–1,2 s até o 1º texto. Só o turno que o código
-responde na hora (ex.: a pergunta do máximo, `llm_ttft` 282 ms) fica sem. Se soar repetitivo, subir para
-1000–1200 ms deixa só os turnos mais lentos com filler.
+Limiar padrão de **1000 ms** (`FILLER_WAIT_MS`, `0` desliga). Com 700 ms, todo turno que passava pelo LLM ganhava
+filler (8 de 8), o que soa robótico. Com 1000 ms, 6 de 8: os 3 do produtor (a rota levou 0,9–1,7 s nessa rodada) e
+3 de 5 na ligação A. Os 2 turnos do negociador com `llm_ttft` ~910 ms responderam direto. O turno que o código
+responde na hora (a pergunta do máximo, ~200–280 ms) nunca ganha. Dá para saber se houve filler pelo `llm_ttft`
+da Agora: com filler ele fica cravado no limiar (1012–1016 ms) e sem `llm_ftfs`.
 
 Perna do produtor (`scripts/audio-demo.sh`, 3 turnos de voz, todos com `criar_tarefa`), uma rodada por linha.
 O que importa é o **tempo até a primeira voz**, e o navegador mede isso (último som da fala até o primeiro som do agente):
@@ -591,21 +592,25 @@ O que importa é o **tempo até a primeira voz**, e o navegador mede isso (últi
 | Filler | `llm_ttft` (Agora) | e2e média (Agora) | Navegador média | Navegador por turno |
 |---|---|---|---|---|
 | desligado | 1084–1205 | 2035 ms | 2328 ms | 2399, 2187, 2399 |
-| **700 ms (padrão)** | 721–724 | 1523 ms | **1890 ms** | 1889, 1860, 1921 |
+| **1000 ms (padrão)** | 1012–1015 | 1873 ms | **2169 ms** | 2219, 2130, 2159 |
+| 700 ms | 721–724 | 1523 ms | 1890 ms | 1889, 1860, 1921 |
 | 300 ms | 317–325 | 1189 ms | 1582 ms | 1744, 1468, 1535 |
 
-- A primeira voz chega **~0,44 s antes** com 700 ms. Com o filler, o `llm_ttft` da Agora passa a medir o filler
+- A primeira voz chega ~0,16 s antes com 1000 ms e ~0,44 s antes com 700 ms. Na rodada de 1000 ms a rota estava mais
+  lenta (`ttft_ms` 1200, 1701 e 856 contra 914, 889 e 992 na rodada sem filler): sem o filler, o turno de 1,7 s
+  teria ficado ~2,8 s calado. Uma rodada por linha: é indicação, não estatística.
+- Com o filler, o `llm_ttft` da Agora passa a medir o filler
   (fica cravado no limiar). A resposta de verdade vem depois, no mesmo tempo de antes.
 - Na gravação dá para ver as duas falas: "Hum, deixa eu ver." (~1,3 s), pausa de ~0,3 s e "Quantos litros?".
 
-Ligação A (`fornecedor-a.wav`, 6 turnos de voz, filler 700 ms): e2e médio 1528 ms. A oferta saiu completa
+Ligação A (`fornecedor-a.wav`, 6 turnos de voz): e2e médio 1528 ms com 700 ms e 1722 ms com 1000 ms. Nas duas, a oferta saiu completa
 (R$ 7,10, quarta, frete do fornecedor, Pix) e **a interrupção continua funcionando**: o turno 3 terminou
-`interrupted` quando o fornecedor falou por cima. A pergunta do máximo, respondida pelo código, não teve filler.
+`interrupted` quando o fornecedor falou por cima (com 1000 ms, esse turno não teve filler). A pergunta do máximo, respondida pelo código, não teve filler.
 
 A volta ao produtor abre com a recomendação montada pelo código (sem espera, sem filler); o "fecha" depois dela
 passa pela rota com tool e ganha o filler como qualquer turno lento. Não foi medido à parte.
 
-Para ouvir: `amostras/silencio/produtor-sem-filler.mp3` e `amostras/silencio/produtor-com-filler-700ms.mp3`
+Para ouvir: `amostras/silencio/produtor-sem-filler.mp3` e `amostras/silencio/produtor-com-filler-700ms.mp3`, gravada com 700 ms
 (a frase "Certo, um minutinho." dessa gravação saiu da lista: depois de um preço, "Certo" soa como aceitar).
 
 ### O que ouvir além do número
