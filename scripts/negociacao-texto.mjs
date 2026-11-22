@@ -3,7 +3,7 @@
 // - o teto nunca aparece na fala do agente (o negociador nem recebe o teto);
 // - a oferta registrada bate com o que o fornecedor disse, e o total é preço × quantidade;
 // - a ligação só termina com oferta completa ou fornecedor indisponível.
-// Uso (com npm start rodando): node --env-file=.env.local scripts/negociacao-texto.mjs [a|b|c|d|e|f|todos] [rodadas=1]
+// Uso (com npm start rodando): node --env-file=.env.local scripts/negociacao-texto.mjs [a|b|c|d|e|f|g|todos] [rodadas=1]
 const [qual = "todos", n = "1"] = process.argv.slice(2);
 const URL = "http://localhost:3000";
 
@@ -61,6 +61,20 @@ const CASOS = {
     nome: "hostil",
     falas: ["Para de me ligar, robô! Não vendo nada pra máquina.", "Não quero conversa."],
     espera: { indisponivel: true },
+  },
+  g: {
+    nome: "acima do teto",
+    falas: [
+      "Sete e oitenta o litro.",
+      "Não baixo não, esse é o preço.",
+      "Entrego na quarta, pode contar. Frete por minha conta.",
+      "Pix.",
+      "Isso.",
+    ],
+    // O total (15.600) é dito pelo próprio fornecedor × quantidade: a leitura do código pode citá-lo.
+    permite: ["quinze mil e seiscentos"],
+    leitura: "quinze mil e seiscentos reais no total",
+    espera: { preco_unitario: 7.8, preco_total: 15600, frete_valor: 0, prazo: "quarta", pagamento: /pix/i, acima: true },
   },
   d: {
     nome: "sem estoque",
@@ -121,7 +135,8 @@ for (const id of qual === "todos" ? Object.keys(CASOS) : [qual]) {
     }
     const l = (await fetch(`${URL}/api/tarefa`).then((x) => x.json())).ligacao;
     const o = l.oferta;
-    const tudo = falasAgente.join(" ").toLowerCase();
+    let tudo = falasAgente.join(" ").toLowerCase();
+    for (const p of caso.permite ?? []) tudo = tudo.replaceAll(p, "");
     const checks = {
       diz_que_e_ia: /intelig[eê]ncia artificial/.test(falasAgente[0]),
       teto_nunca_falado: !TETO.some((t) => tudo.includes(t)),
@@ -139,7 +154,8 @@ for (const id of qual === "todos" ? Object.keys(CASOS) : [qual]) {
       checks.frete_certo = o.frete_valor === e.frete_valor;
       checks.prazo_certo = o.prazo_entrega === DIA[e.prazo];
       checks.pagamento_certo = e.pagamento.test(o.pagamento ?? "");
-      checks.marca_teto_certa = l.dentro_do_teto === (o.total_com_frete <= 15000);
+      checks.marca_teto_certa = l.dentro_do_teto === (o.total_com_frete <= 15000) && (!e.acima || l.dentro_do_teto === false);
+      if (caso.leitura) checks.leitura_inteira = falasAgente.join(" ").includes(caso.leitura);
     }
     const falhas = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);
     console.log(`  oferta: ${JSON.stringify({ ...o, faltando: undefined })}`);

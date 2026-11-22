@@ -223,6 +223,7 @@ export const registrarOfertaSchema = z.object({
     .describe("Só se o fornecedor fez uma pergunta: UMA frase curta respondendo, sem pergunta e sem número do produtor. O sistema emenda o resto."),
 });
 
+const FRETE_DELE = /\b(minha conta|conta (do|dele|da) (fornecedor|distribuidora)|conta dele|gratis|gratuito|incluso|incluido|cif|sem custo|nossa conta)\b/;
 const RECUSOU_BAIXAR = /\b(n[aã]o d[aá]|n[aã]o baixa|n[aã]o tem como|mais que isso n[aã]o|[eé] o (meu )?melhor|t[aá] apertado|n[aã]o consigo|esse [eé] o pre[cç]o)\b/i;
 
 // Táticas de melhora, uma por vez, faladas pelo código (CLAUDE.md, seção 8: volume, à vista, frete).
@@ -251,12 +252,24 @@ function leitura(l: Ligacao) {
 }
 
 const semAcento = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// "dia vinte e cinco" → "dia 25" (o ASR entrega número falado por extenso). Só 1–31, para datas.
+const NUM: Record<string, number> = {
+  primeiro: 1, um: 1, dois: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11,
+  doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19,
+};
+export function diasPorExtensoEmDigitos(texto: string) {
+  return semAcento(texto).replace(
+    /\bdia (vinte|trinta)(?: e (um|dois|tres|quatro|cinco|seis|sete|oito|nove))?\b|\bdia (primeiro|um|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|catorze|quinze|dezesseis|dezessete|dezoito|dezenove)\b/g,
+    (_, dezena, unidade, simples) => `dia ${dezena ? (dezena === "vinte" ? 20 : 30) + (unidade ? NUM[unidade] : 0) : NUM[simples]}`,
+  );
+}
 const CHAVES_PRAZO = /\b(segunda|terca|quarta|quinta|sexta|sabado|domingo|hoje|amanha|semana|mes|\d{1,2}|primeiro|dois|tres|quatro|cinco|seis|sete|oito|nove|dez|onze|doze|treze|quatorze|quinze|vinte|trinta)\b/g;
 
 /** O prazo só vale se as palavras-chave dele (dia da semana, número…) saíram da boca do fornecedor. */
 function prazoDito(l: Ligacao, prazo: string) {
-  const chaves = semAcento(prazo).match(CHAVES_PRAZO) ?? [];
-  const dito = semAcento(l.falas_fornecedor);
+  const chaves = diasPorExtensoEmDigitos(prazo).match(CHAVES_PRAZO) ?? [];
+  const dito = diasPorExtensoEmDigitos(l.falas_fornecedor);
   return chaves.length > 0 && chaves.every((c) => new RegExp(`\\b${c}`).test(dito));
 }
 /** O preço só vale se a parte inteira (6 ou "seis") foi dita pelo fornecedor. */
@@ -276,7 +289,11 @@ export function registrarOferta(l: Ligacao, e: z.infer<typeof registrarOfertaSch
   const limpo = (v?: string) => (v && v.trim() ? v.trim() : undefined);
   const fala: string[] = [];
   // Só a parte afirmativa: a pergunta é do código, para não sair duas.
-  const resposta = (limpo(e.resposta_curta) ?? "").split(/(?<=[.!?…])\s+/).filter((f) => f && !f.includes("?")).join(" ");
+  // É texto do modelo: passa pelo filtro completo aqui, porque a fala do código pula a checagem do teto.
+  const resposta = (limpo(e.resposta_curta) ?? "")
+    .split(/(?<=[.!?…])\s+/)
+    .filter((f) => f && !f.includes("?") && conferirFrase(l, f).ok)
+    .join(" ");
   if (resposta) fala.push(resposta);
 
   let unit = e.preco_unitario;
@@ -303,7 +320,7 @@ export function registrarOferta(l: Ligacao, e: z.infer<typeof registrarOfertaSch
   else if (limpo(e.prazo_entrega)) {
     const falado = limpo(e.prazo_entrega)!;
     o.prazo_falado = falado;
-    const data = normalizarPrazo(falado);
+    const data = normalizarPrazo(diasPorExtensoEmDigitos(falado));
     // O modelo pode "limpar" o talvez; por isso a última fala do fornecedor também conta.
     const ultima = l.ultima_fala_fornecedor;
     const hesitou = HESITA.test(falado) || (HESITA.test(ultima) && !FIRME.test(ultima));
@@ -314,6 +331,8 @@ export function registrarOferta(l: Ligacao, e: z.infer<typeof registrarOfertaSch
   }
   if (limpo(e.frete)) o.frete = limpo(e.frete);
   if (e.frete_valor !== undefined && e.frete_valor >= 0) o.frete_valor = e.frete_valor;
+  // "por conta do fornecedor", "grátis", "incluso": o modelo às vezes esquece frete_valor = 0.
+  else if (limpo(e.frete) && FRETE_DELE.test(semAcento(e.frete!))) o.frete_valor = 0;
   if (limpo(e.pagamento)) o.pagamento = limpo(e.pagamento);
   if (limpo(e.observacoes)) o.observacoes = limpo(e.observacoes);
 
@@ -447,11 +466,15 @@ export type Veredito = { ok: true } | { ok: false; motivo: "lixo" | "teto" | "fe
 const FORA_DO_PT = /[^a-zA-ZáàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇ0-9\s.,!?;:…'"()%$ºª/-]/;
 const REPETICAO = /(.{2,8})\1{4,}/;
 
-/** Confere cada frase antes de ela ir para a voz. */
-export function conferirFrase(l: Ligacao, frase: string): Veredito {
+/**
+ * Confere cada frase antes de ela ir para a voz. `doCodigo`: frase montada pelo código com números que o
+ * fornecedor disse (ex.: a leitura "dá quinze mil e seiscentos reais"); não passa pela checagem do teto,
+ * senão uma oferta acima do teto teria a própria leitura cortada.
+ */
+export function conferirFrase(l: Ligacao, frase: string, doCodigo = false): Veredito {
   const s = frase.toLowerCase();
   if (FORA_DO_PT.test(frase) || REPETICAO.test(s)) return { ok: false, motivo: "lixo" };
-  if (formasDoTeto(l).some((f) => s.includes(f))) return { ok: false, motivo: "teto" };
+  if (!doCodigo && formasDoTeto(l).some((f) => s.includes(f))) return { ok: false, motivo: "teto" };
   if (FECHA_NEGOCIO.test(s)) return { ok: false, motivo: "fecha_negocio" };
   if (DESPEDIDA.test(s) && !podeEncerrar(l)) return { ok: false, motivo: "despedida_cedo" };
   return { ok: true };

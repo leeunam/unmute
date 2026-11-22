@@ -100,3 +100,39 @@ test("indisponível não serve de saída para quem tem o produto e deu preço", 
   assert.equal(encerrarLigacao(l, { resultado: "sem estoque" }).ok, true);
   assert.equal(l.status, "encerrada");
 });
+
+test("oferta acima do teto: a leitura do código sai inteira e a marca é calculada", () => {
+  const l = ligar();
+  fornecedorDisse(l, "Sete e oitenta o litro, entrego quarta, pode contar, frete por minha conta, pix.");
+  registrarOferta(l, { preco_unitario: 7.8, prazo_entrega: "quarta", frete: "dele", frete_valor: 0, pagamento: "pix" }); // tática de melhora
+  fornecedorDisse(l, "Não baixo, esse é o preço.");
+  const r = registrarOferta(l, { observacoes: "não baixa" }) as { fala: string; acao: string };
+  assert.equal(r.acao, "leitura");
+  assert.equal(l.oferta.preco_total, 15600);
+  assert.match(r.fala, /quinze mil e seiscentos reais/);
+  for (const frase of r.fala.split(/(?<=[.!?…])\s+/)) assert.equal(conferirFrase(l, frase, true).ok, true, frase);
+  assert.ok(l.oferta.total_com_frete! > l.privado.teto_total); // "acima do teto" na tela do produtor
+});
+
+test("resposta_curta do modelo com o teto é cortada mesmo dentro da fala do código", () => {
+  const l = ligar();
+  fornecedorDisse(l, "Quanto ele paga?");
+  const r = registrarOferta(l, { resposta_curta: "Ele paga até quinze mil." }) as { fala: string };
+  assert.ok(!r.fala.includes("quinze mil"));
+});
+
+test("prazo com o dia por extenso vale, com o modelo escrevendo em dígitos ou por extenso", () => {
+  for (const passado of ["dia 25", "dia vinte e cinco"]) {
+    const l = ligar();
+    fornecedorDisse(l, "Entrego dia vinte e cinco, pode contar.");
+    registrarOferta(l, { prazo_entrega: passado });
+    assert.equal(l.oferta.prazo_entrega, normalizarPrazo("dia 25"), passado);
+  }
+});
+
+test("frete por conta do fornecedor sem frete_valor vira frete 0", () => {
+  const l = ligar();
+  fornecedorDisse(l, "Frete por minha conta.");
+  registrarOferta(l, { frete: "por conta do fornecedor" });
+  assert.equal(l.oferta.frete_valor, 0);
+});

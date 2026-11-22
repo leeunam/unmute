@@ -156,9 +156,9 @@ export async function POST(req: NextRequest) {
     const bloqueios: string[] = [];
     let despediuSe = false;
     // Frase a frase: só sai para a voz o que passou no filtro.
-    const soltar = (frase: string) => {
+    const soltar = (frase: string, doCodigo = false) => {
       if (!frase.trim()) return;
-      const v = conferirFrase(l, frase);
+      const v = conferirFrase(l, frase, doCodigo);
       if (!v.ok) {
         bloqueios.push(`${v.motivo}: ${frase.trim()}`);
         if (v.motivo === "despedida_cedo") l.saidas_bloqueadas++;
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
     }
     soltar(buffer);
     // A fala do código (resultado de registrar_oferta) também passa pelo filtro.
-    for (const f of falasTool) for (const frase of f.split(/(?<=[.!?…])\s+/)) soltar(frase);
+    for (const f of falasTool) for (const frase of f.split(/(?<=[.!?…])\s+/)) soltar(frase, true);
 
     const tentouSair = bloqueios.some((b) => b.startsWith("despedida_cedo"));
     if (encerrouAgora) {
