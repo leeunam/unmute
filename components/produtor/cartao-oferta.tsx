@@ -59,7 +59,7 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
     <article
       data-slot="card"
       className={cn(
-        "m-fade flex flex-col rounded-2xl bg-card p-5 shadow-2",
+        "m-fade flex flex-col rounded-2xl bg-card p-4 shadow-2",
         recomendada && "shadow-none ring-2 ring-primary",
         fechada && "bg-surface-accent",
       )}
@@ -86,7 +86,7 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
         </div>
       </header>
 
-      <div className="mt-5 flex items-baseline gap-2">
+      <div className="mt-3 flex items-baseline gap-2">
         <span className={cn("text-[30px] leading-[1.1] font-semibold tracking-[-0.02em]", descartada && "text-muted-foreground")}>
           {o.total !== undefined ? <AnimatedNumber value={o.total} money duration={0.8} /> : <span className="text-muted-foreground">—</span>}
         </span>
@@ -95,7 +95,7 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
       {o.precoInicial ? <p className="mt-1 text-[13px] text-muted-foreground tabular-nums">{o.precoInicial}</p> : null}
 
       {o.marcas.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {fechada ? (
             <Badge variant="status" tone="success" size="md">
               Fechada
@@ -111,9 +111,9 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
       )}
       {o.motivo && o.marcas.includes("sem_oferta") ? <p className="mt-2 text-[13px] text-muted-foreground">{o.motivo}</p> : null}
 
-      <dl className="mt-4 text-sm">
+      <dl className="mt-3 text-sm">
         {linhas.map(([k, v]) => (
-          <div key={k} className="flex justify-between gap-3 border-t border-border-muted py-2">
+          <div key={k} className="flex justify-between gap-3 border-t border-border-muted py-1.5">
             <dt className="text-muted-foreground">{k}</dt>
             <dd className="text-right font-medium tabular-nums">
               {v !== undefined ? (
@@ -129,7 +129,7 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
       </dl>
 
       {onAprovar && recomendada && !fechada ? (
-        <Button size="lg" className="mt-4 w-full" onClick={onAprovar}>
+        <Button size="lg" className="mt-3 w-full" onClick={onAprovar}>
           Fechar com o {o.id.toUpperCase()}
         </Button>
       ) : null}

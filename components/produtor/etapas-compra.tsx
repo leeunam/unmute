@@ -18,7 +18,7 @@ export function EtapasCompra({ atual }: { atual: EtapaCompra }) {
   const fim = atual === "fechada";
   return (
     <div>
-      <p className="mb-3 text-[13px] text-muted-foreground">
+      <p className="mb-2 text-[13px] text-muted-foreground">
         {cancelada ? "Compra cancelada" : ETAPAS[idx]?.agora}
       </p>
       <ol className="flex items-start">

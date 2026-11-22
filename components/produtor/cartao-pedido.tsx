@@ -10,10 +10,24 @@ type Props = {
   /** null enquanto a tarefa ainda não chegou do servidor. */
   campos: CampoPedido[] | null;
   completa: boolean;
+  /** Com a compra andando, o pedido vira esta linha só, para a compra caber na tela. */
+  resumo?: string;
 };
 
 /** O pedido estruturado: cada campo entra com uma animação curta quando o agente o preenche. */
-export function CartaoPedido({ campos, completa }: Props) {
+export function CartaoPedido({ campos, completa, resumo }: Props) {
+  if (resumo)
+    return (
+      <Card className="m-enter flex items-center gap-3 px-6 py-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-surface-accent text-primary-ink">
+          <Basket weight="duotone" className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] text-muted-foreground">Pedido</p>
+          <p className="text-[15px] font-semibold tabular-nums">{resumo}</p>
+        </div>
+      </Card>
+    );
   const faltam = campos?.filter((c) => c.faltando).map((c) => c.rotulo.toLowerCase()) ?? [];
   // Os campos curtos em pares, os longos (data, local, observações) na linha inteira.
   const ordem = campos ? [...campos.filter((c) => !c.largo), ...campos.filter((c) => c.largo)] : null;
