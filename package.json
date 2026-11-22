@@ -1,0 +1,29 @@
+{
+  "name": "desenrola-agro",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "tunel": "cloudflared tunnel --url http://localhost:3000",
+    "medir-llm": "node --env-file=.env.local scripts/medir-llm.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.94",
+    "agora-rtc-sdk-ng": "^4.24.10",
+    "agora-token": "^2.0.7",
+    "ai": "^7.0.179",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "puppeteer-core": "^25.18.1",
+    "typescript": "^7.0.2"
+  }
+}
