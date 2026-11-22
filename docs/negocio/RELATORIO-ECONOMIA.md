@@ -63,6 +63,18 @@ Quem também compra farelo economiza mais **R$ 4.800 a 7.200 por carga de 30 t**
 - **R$ 275 (cenário conservador, 50%):** o agente captura só metade dessa diferença. Serve de piso para a banca: mesmo assim, a economia é 2,75 vezes o preço.
 - **O 14% não entra na conta.** Ele mostra o tamanho da diferença (Sorriso, do mais caro ao mais barato, R$ 2.000 em 2.000 L). Os 4% são a parte que consideramos capturável.
 
+### Evidência de que negociar baixa o preço: pregões públicos de diesel S10
+
+| Caso | Proposta inicial → lance final | Redução | Em 2.000 L |
+|---|---|---|---|
+| Bozano (RS), pregão 02/2025, 64.500 L | R$ 6,04 → R$ 5,52/L (R$ 389.580 → R$ 356.040) | R$ 0,52/L (8,6%), **R$ 33.540** no lote | R$ 1.040 |
+| Dom Pedrito (RS), registro 22/2025 | — | R$ 0,20/L | R$ 400 |
+| **Média dos dois** | | **R$ 0,36/L** | **R$ 720** |
+
+Na mesma faixa, uma cotação de 15.000 L em Governador Valadares (MG, 2026) recebeu propostas de R$ 91.500 e R$ 104.850 de fornecedores diferentes, R$ 13.350 de diferença (cerca de 15%).
+
+**Para que serve:** os R$ 0,275/L do nosso modelo ficam entre Dom Pedrito (R$ 0,20/L) e a média dos pregões (R$ 0,36/L). Por isso dá para dizer que capturar 4% é plausível, e não só uma conta. A amostra tem só dois casos, de compra pública e com volume grande.
+
 ---
 
 ## 3. Farelo de soja: diferença entre fornecedores (16 a 24%)
@@ -129,7 +141,8 @@ Com margem de ~R$ 229/ha, cada real economizado em insumo pesa muito no lucro. *
 
 ## 6. Modelo de negócio: R$ 100 por produtor ativo
 
-- **Quem paga:** a cooperativa agrícola, R$ 100 por mês por produtor que usou o serviço no mês.
+- **Quem paga:** a cooperativa agrícola, R$ 100 por mês por produtor ativo. No piloto, **ativo é quem recebe ao menos uma proposta válida no mês**. Preço, limite de uso e critério de cobrança precisam ser validados com a cooperativa. A assinatura paga direto pelo produtor ficou como hipótese secundária.
+- **Garantia (proposta):** no mês em que a economia medida do produtor ficar abaixo de R$ 100, ele não é cobrado.
 - **Por que compensa:** o cooperado economiza de R$ 275 (conservador) a R$ 550 (possibilidade) por mês, só no diesel. Cada R$ 1 pago vira R$ 2,75 a R$ 5,50 de economia.
 - **Modelo descartado:** cobrar 10% da economia direto do produtor. Exigia medir a economia em cada compra e soava como comissão. A assinatura é mais simples de vender para a cooperativa.
 
@@ -159,7 +172,7 @@ Agora a US$ 0,10/min, câmbio a R$ 5,50. A IA (voz e APIs) é só **R$ 15** dos 
 | KPI | Meta |
 |---|---|
 | Economia por real pago | 5× |
-| Produtores que voltam a cotar | todo mês |
+| Produtores que voltam a cotar | % da coorte que faz nova cotação em até 90 dias (meta a validar) |
 | Custo por produtor ativo | até R$ 70 |
 
 ---
@@ -225,10 +238,57 @@ Quem compra farelo economiza **R$ 4.800 a 7.200 por carga de 30 t** (8 a 12% con
 
 ---
 
-## 10. Fontes
+## 10. Mercado, público e roadmap (contexto final do grupo)
+
+### Público
+| Papel | Recorte inicial |
+|---|---|
+| Quem usa | Produtor de grãos de Mato Grosso que compra diesel com frequência, sem comprador dedicado |
+| Quem paga (hipótese) | Cooperativa agrícola que oferece o serviço aos cooperados e mede o benefício |
+| Quem fornece | Revendas e distribuidores da região que cotam diesel com entrega |
+
+### Dor e escala
+- **8 fornecedores consultados** para cotar 15.000 L de diesel S10 em Feliz Natal (MT), em janeiro de 2025, numa cotação para uma cooperativa de transporte. Oferta vencedora: R$ 90.600 (Unicafes).
+- **1.254 cooperativas agropecuárias**, com **R$ 487,33 bilhões** em ingressos em 2025 (OCB, AnuárioCoop 2026).
+- **~R$ 23,7 bilhões** em combustíveis e lubrificantes na agropecuária em 2017 (13,2% de R$ 179,3 bi de consumo intermediário). O valor inclui outros itens além do diesel e tem ano-base 2017.
+
+### TAM, SAM e SOM
+| Recorte | Número | Método |
+|---|---:|---|
+| TAM aproximado | 420.719 estabelecimentos | Brasil, 100 a menos de 1.000 ha (Censo Agro 2017) |
+| SAM aproximado | 27.374 estabelecimentos | Mesmo recorte em MT (Sudam) |
+| SOM, meta | 100 produtores ativos no mês 12 | 2 cooperativas × 50 ativos, sem contrato |
+
+O tamanho da área serve como aproximação do porte da fazenda. A base inclui atividades além de grãos e ainda precisa ser filtrada.
+
+### Receita no ano 1
+(25 + 50 + 75 + 100) × 3 × R$ 100 = **R$ 75.000**, supondo essas médias de ativos pagantes por trimestre. Se o 1º trimestre tiver só os 5 produtores do piloto, o valor cai para **R$ 69.000**. No pitch, o número mais simples é a meta de **R$ 10 mil/mês no mês 12**.
+
+### Roadmap
+| Etapa | O que fazer | Com quem |
+|---|---|---|
+| 0–3 meses, piloto | Diesel com 5 produtores de grãos de MT. Medir tempo, propostas válidas e economia comparável. | 1 cooperativa regional (porta de entrada possível: Unicafes MT; confirmar o encaixe) |
+| 3–6 meses, expansão | Cotação por telefone, histórico de NF-e e alertas de reposição | Parceiros de telefonia e gestão rural |
+| 6–12 meses, escala | Compra coletiva e outros insumos (farelo, fertilizante). Meta de 100 ativos em 2 cooperativas. | Cooperativas e fornecedores |
+
+---
+
+## 11. Fontes
 
 **Diesel**
 - ANP, Levantamento de Preços de Combustíveis: https://www.gov.br/anp/pt-br/assuntos/precos-e-defesa-da-concorrencia/precos/levantamento-de-precos-de-combustiveis-ultimas-semanas-pesquisadas
+
+**Pregões e cotações de diesel**
+- Bozano (RS), pregão 02/2025, lote 2: https://www.bozano.rs.gov.br/ata-abertura/ata-abertura-index/download/2025/166/
+- Dom Pedrito (RS), registro 22/2025: https://xadmin.s3.us-east-2.amazonaws.com/275/DocumentAssets/594721/images/original/AtaTotal_384246.pdf
+- Unicafes, Feliz Natal (MT), 2025: https://www.unicafes.org.br/upload/download/1027.pdf
+- Unicafes, Governador Valadares (MG), 2026: https://www.unicafes.org.br/upload/download/1181.pdf
+
+**Mercado**
+- OCB, AnuárioCoop 2026, ramo agropecuário: https://somoscooperativismo.coop.br/anuariocoop/ramo-agropecuario
+- IBGE, Censo Agropecuário 2017: https://biblioteca.ibge.gov.br/visualizacao/periodicos/3096/agro_2017_resultados_definitivos.pdf
+- Sudam, PRDA, tabela 6: https://www.gov.br/sudam/pt-br/documentos/prda-2020-2023.pdf
+- Ipea, Direções do Crescimento na Agricultura, tabela 4: https://repositorio.ipea.gov.br/bitstreams/30539461-b9cd-4ce4-a4fe-4a3337a128ed/download
 
 **Farelo de soja**
 - MF Rural, anúncios: https://www.mfrural.com.br/busca/farelo · https://www.mfrural.com.br/busca/farelo-de-soja
