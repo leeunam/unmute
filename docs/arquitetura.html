@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Arquitetura</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Open+Sans:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0d2a1e; --green:#4a9630; --green-2:#3c7d27; --soft:#4f6158; --line:#cfd8d1;
+    --paper:#ffffff; --mist:#f3f7f2; --chip:#e5efe0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1600px;height:1080px;background:var(--paper);font-family:'Open Sans',Arial,sans-serif;color:var(--ink);position:relative;overflow:hidden}
+  .blob{position:absolute;top:-70px;right:-60px;width:260px;height:200px;background:var(--green);border-radius:0 0 0 62% / 0 0 0 70%;transform:rotate(-8deg)}
+  .wrap{position:absolute;inset:72px 80px 0 80px}
+  .eyebrow{font-family:'Bebas Neue';font-size:30px;letter-spacing:.06em;color:var(--green)}
+  h1{font-family:'Bebas Neue';font-weight:400;font-size:80px;line-height:.95;letter-spacing:.005em;margin-top:6px}
+  h1 em{font-style:normal;color:var(--green)}
+
+  .flow{display:flex;align-items:center;margin-top:44px}
+  .col{display:flex;flex-direction:column;gap:22px;justify-content:center}
+  .people{width:250px}
+  .person{border:2px solid var(--line);border-radius:22px;padding:22px 22px 20px;background:var(--paper)}
+  .person .ico{width:46px;height:46px;border-radius:14px;background:var(--chip);display:grid;place-items:center;margin-bottom:12px}
+  .t{font-family:'Bebas Neue';font-size:34px;line-height:1;letter-spacing:.01em}
+  .s{font-size:17px;color:var(--soft);margin-top:4px;line-height:1.35}
+
+  .arrow{width:118px;display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative}
+  .arrow svg{width:118px;height:24px}
+  .arrow .lbl{font-size:14px;line-height:1.3;color:var(--soft);text-align:center;margin-bottom:8px;width:112px}
+  .arrow .lbl b{color:var(--ink);font-weight:700}
+
+  .agora{width:470px;background:var(--ink);color:#fff;border-radius:28px;padding:30px 30px 26px;display:flex;flex-direction:column;gap:16px;box-shadow:0 24px 48px -28px rgba(13,42,30,.55)}
+  .agora .tag{font-family:'Bebas Neue';font-size:24px;letter-spacing:.06em;color:#9fd38b}
+  .agora .big{font-family:'Bebas Neue';font-size:40px;line-height:.95;margin-top:-6px}
+  .step{display:grid;grid-template-columns:96px 1fr;align-items:center;background:rgba(255,255,255,.07);border-radius:16px;padding:14px 16px}
+  .step .v{font-family:'Bebas Neue';font-size:34px;color:#9fd38b;letter-spacing:.02em}
+  .step .d{font-size:17px;line-height:1.3}
+  .step .d b{font-weight:700}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+  .chip{font-size:13px;padding:5px 11px;border-radius:999px;background:rgba(159,211,139,.16);color:#d7ecd0}
+
+  .ours{width:410px;border:3px solid var(--green);border-radius:28px;padding:28px 28px 24px;background:var(--mist);display:flex;flex-direction:column;gap:6px}
+  .ours .tag{font-family:'Bebas Neue';font-size:24px;letter-spacing:.06em;color:var(--green-2)}
+  .ours .big{font-family:'Bebas Neue';font-size:46px;line-height:.95}
+  .ours .sub{font-size:17px;color:var(--soft);margin-bottom:10px}
+  .rule{display:flex;gap:12px;align-items:flex-start;font-size:17px;line-height:1.35;padding:9px 0;border-top:1px solid #d6e3d2}
+  .rule svg{flex:none;margin-top:2px}
+
+  .llm{width:190px}
+  .llm .box{border:2px solid var(--line);border-radius:22px;padding:22px;background:var(--paper)}
+  .llm .t{font-size:32px}
+  .reserve{font-size:14px;color:var(--soft);margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);line-height:1.35}
+
+  .foot{position:absolute;left:80px;right:80px;bottom:64px;display:flex;align-items:flex-end;gap:22px}
+  .num{font-family:'Bebas Neue';font-size:118px;line-height:.8;color:var(--green)}
+  .num-d{font-size:20px;color:var(--soft);padding-bottom:6px;line-height:1.35}
+  .num-d b{color:var(--ink)}
+  .stack{margin-left:auto;text-align:right;font-size:15px;color:var(--soft);line-height:1.5;padding-bottom:6px}
+  .stack b{color:var(--ink);font-weight:600}
+  .grass{position:absolute;left:0;right:0;bottom:0;height:46px}
+</style>
+</head>
+<body>
+<div class="blob"></div>
+<div class="wrap">
+  <p class="eyebrow">Arquitetura · Desenrola Agro</p>
+  <h1>A Agora cuida da voz.<br><em>O raciocínio é nosso.</em></h1>
+
+  <div class="flow">
+    <!-- Pessoas -->
+    <div class="col people">
+      <div class="person">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3c7d27" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></div>
+        <p class="t">Produtor</p>
+        <p class="s">Fala o pedido no navegador, do campo.</p>
+      </div>
+      <div class="person">
+        <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3c7d27" stroke-width="2" stroke-linecap="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18h2"/></svg></div>
+        <p class="t">Fornecedores A e B</p>
+        <p class="s">Atendem a ligação, como num celular.</p>
+      </div>
+    </div>
+
+    <div class="arrow">
+      <p class="lbl"><b>Voz em tempo real</b><br>Agora RTC</p>
+      <svg viewBox="0 0 118 24"><path d="M4 12H104" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round"/><path d="M98 4l12 8-12 8" fill="none" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Agora -->
+    <div class="agora">
+      <div>
+        <p class="tag">Agora</p>
+        <p class="big">Conversational AI Engine</p>
+      </div>
+      <div class="step"><span class="v">Ouve</span><span class="d"><b>Deepgram nova-3</b> em português</span></div>
+      <div class="step"><span class="v">Pensa</span><span class="d">chama o <b>nosso servidor</b> a cada turno</span></div>
+      <div class="step"><span class="v">Fala</span><span class="d"><b>Cartesia sonic-3.6</b>, voz Alice</span></div>
+      <div class="chips">
+        <span class="chip">para quando interrompem</span>
+        <span class="chip">fim de fala em 300 ms</span>
+        <span class="chip">“hum, deixa eu ver”</span>
+      </div>
+    </div>
+
+    <div class="arrow">
+      <p class="lbl"><b>Chat da OpenAI</b><br>com streaming</p>
+      <svg viewBox="0 0 118 24"><path d="M4 12H104" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round"/><path d="M98 4l12 8-12 8" fill="none" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- Nosso servidor -->
+    <div class="ours">
+      <p class="tag">Nosso servidor</p>
+      <p class="big">O código garante</p>
+      <p class="sub">Next.js + Vercel AI SDK, tools validadas em zod</p>
+      <div class="rule"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#4a9630"/><path d="M5.5 10.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>O negociador <b>nunca recebe o teto</b></span></div>
+      <div class="rule"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#4a9630"/><path d="M5.5 10.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>A ligação só acaba com a <b>oferta completa</b></span></div>
+      <div class="rule"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#4a9630"/><path d="M5.5 10.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Total e números falados <b>saem do código</b></span></div>
+      <div class="rule"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#4a9630"/><path d="M5.5 10.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Compara as ofertas e <b>só o produtor fecha</b></span></div>
+    </div>
+
+    <div class="arrow">
+      <p class="lbl"><b>Gateway</b><br>de LLM</p>
+      <svg viewBox="0 0 118 24"><path d="M4 12H104" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round"/><path d="M98 4l12 8-12 8" fill="none" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+
+    <!-- LLM -->
+    <div class="col llm">
+      <div class="box">
+        <p class="s" style="margin:0 0 6px">feita.ai</p>
+        <p class="t">Gemini 3.5 Flash Lite</p>
+        <p class="reserve">Se falhar, tenta de novo com o Nemotron.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <span class="num">~1,8 s</span>
+  <span class="num-d"><b>do fim da fala ao início da resposta</b><br>média medida pela Agora no fluxo completo</span>
+  <span class="stack"><b>Agora RTC</b> · <b>Conversational AI Engine</b><br>Deepgram · Cartesia · Next.js · Vercel AI SDK · feita.ai</span>
+</div>
+
+<svg class="grass" viewBox="0 0 1600 46" preserveAspectRatio="none">
+  <path d="M0 40 C 260 18, 520 14, 800 22 S 1340 34, 1600 16" fill="none" stroke="#0d2a1e" stroke-width="3" stroke-linecap="round"/>
+  <g stroke="#0d2a1e" stroke-width="2" stroke-linecap="round">
+    <path d="M90 32l8-12M100 31l6-10M240 25l9-13M252 24l6-10M420 19l8-12M432 18l5-9M640 18l9-13M652 18l6-10M880 23l8-12M892 24l5-9M1080 28l9-13M1092 28l6-10M1290 30l8-12M1302 29l5-9M1480 22l9-13M1492 21l6-10"/>
+  </g>
+</svg>
+</body>
+</html>
