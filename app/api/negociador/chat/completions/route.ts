@@ -11,7 +11,8 @@
 import { streamText, tool, type ModelMessage } from "ai";
 import { NextRequest } from "next/server";
 import { avancar } from "@/lib/compra";
-import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
+import { comReserva, feita, feitaModelId, feitaModeloReserva, feitaReasoning } from "@/lib/feita";
+import { sanear, SEM_FALA, type MensagemOpenAI } from "@/lib/historico";
 import {
   conferirFrase,
   contextoNegociador,
@@ -34,28 +35,13 @@ import {
   type Ligacao,
 } from "@/lib/negociacao";
 
-type OpenAIMessage = { role: string; content: unknown };
-
-function texto(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((p) => (typeof p === "string" ? p : p && typeof p === "object" && "text" in p ? String(p.text) : ""))
-      .join("");
-  }
-  return "";
-}
-
 // O prompt de sistema é todo do código (o da Agora é ignorado): regras + contexto sem teto.
-function conversa(l: Ligacao, messages: OpenAIMessage[]) {
-  const msgs: ModelMessage[] = [];
-  for (const m of messages) {
-    const content = texto(m.content);
-    if (content && (m.role === "user" || m.role === "assistant")) msgs.push({ role: m.role, content });
-  }
+// O histórico vem saneado (lib/historico.ts): sem vazias e com as seguidas do mesmo papel juntas.
+function conversa(l: Ligacao, messages: MensagemOpenAI[]) {
+  const { conversa: msgs, semFala, ajustes } = sanear(messages);
   // Se a Agora não mandar a saudação no histórico, ela entra aqui: o modelo precisa saber que já se apresentou.
-  if (msgs[0]?.role !== "assistant") msgs.unshift({ role: "assistant", content: saudacao(l) });
-  return msgs;
+  if (msgs[0]?.role !== "assistant") msgs.unshift({ role: "assistant", content: saudacao(l) } as ModelMessage);
+  return { msgs, semFala, ajustes };
 }
 
 function ferramentas(l: Ligacao) {
@@ -121,7 +107,13 @@ export async function POST(req: NextRequest) {
     return resposta(async (falar) => falar(l ? "Até mais!" : "Desculpa, essa ligação não está ativa."));
   }
 
-  const msgs = conversa(l, body.messages ?? []);
+  const { msgs, semFala, ajustes } = conversa(l, body.messages ?? []);
+  // O fornecedor não disse nada que deu para usar (ex.: logo depois de uma interrupção): pede para repetir,
+  // antes de mexer no estado da ligação. Sem isso, o histórico termina numa fala do agente e o Gemini recusa (400).
+  if (semFala) {
+    console.log(`[negociador] fornecedor=${l.fornecedor.id} turno=${turno} sem_fala historico=${JSON.stringify(ajustes)}`);
+    return resposta(async (falar) => falar(SEM_FALA));
+  }
   const ultima = msgs.at(-1);
   l.ultima_fala_fornecedor = ultima?.role === "user" ? String(ultima.content) : "";
   l.falas_fornecedor = msgs.filter((m) => m.role === "user").map((m) => String(m.content)).join(" ");
@@ -140,8 +132,8 @@ export async function POST(req: NextRequest) {
     return resposta(async (falar) => falar(fala));
   }
 
-  const result = streamText({
-    model: feita.chatModel(modelo),
+  const criar = (m: string) => streamText({
+    model: feita.chatModel(m),
     instructions: `${PROMPT_NEGOCIADOR}\n\n${contextoNegociador(l)}`,
     messages: msgs,
     tools: ferramentas(l),
@@ -155,8 +147,8 @@ export async function POST(req: NextRequest) {
       !!steps.at(-1)?.toolResults.some((r) => typeof (r.output as { fala?: string })?.fala === "string"),
     maxOutputTokens: body.max_tokens ?? 300,
     abortSignal: req.signal,
-    providerOptions: { feita: { reasoning: feitaReasoning(modelo) } } as never,
-    onError: ({ error }) => console.error("[negociador] erro", error),
+    providerOptions: { feita: { reasoning: feitaReasoning(m) } } as never,
+    onError: ({ error }) => console.error("[negociador] erro", m, error instanceof Error ? error.message : error),
   });
 
   let primeiro = 0;
@@ -191,7 +183,17 @@ export async function POST(req: NextRequest) {
     let buffer = "";
     let encerrouAgora = false;
     const falasTool: string[] = [];
-    for await (const part of result.fullStream) {
+    // Se o gateway der erro, uma 2ª tentativa com outro modelo (lib/feita.ts).
+    const partes = comReserva(() => criar(modelo).fullStream, () => criar(feitaModeloReserva()).fullStream, "negociador", {
+      signal: req.signal,
+      falou: () => !!dito,
+      // O que a 1ª juntou (texto degenerado, frase cortada) não entra na fala da 2ª.
+      recomecar: () => {
+        buffer = "";
+        passos.push("2a_tentativa");
+      },
+    });
+    for await (const part of partes) {
       const ms = Math.round(performance.now() - t0);
       if (part.type === "tool-call") passos.push(`tool@${ms} ${part.toolName} ${JSON.stringify(part.input)}`);
       if (part.type === "tool-result") {
@@ -240,7 +242,7 @@ export async function POST(req: NextRequest) {
     avancar(); // se esta ligação acabou, a próxima toca
     const ttft = primeiro ? Math.round(primeiro - t0) : -1;
     console.log(
-      `[negociador] fornecedor=${l.fornecedor.id} turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(dito)} bloqueios=${JSON.stringify(bloqueios)} passos=${JSON.stringify(passos)}`,
+      `[negociador] fornecedor=${l.fornecedor.id} turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(dito)} bloqueios=${JSON.stringify(bloqueios)} passos=${JSON.stringify(passos)}${ajustes.length ? ` historico=${JSON.stringify(ajustes)}` : ""}`,
     );
   });
 }

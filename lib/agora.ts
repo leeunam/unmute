@@ -8,6 +8,7 @@
 //   modo gerenciado (ASR/TTS sem chave): https://docs.agora.io/en/ai/build/managed-mode
 import { ConvoAITokenBuilder, RtcRole, RtcTokenBuilder } from "agora-token";
 import { FEITA_GATEWAY, feitaModelId, feitaReasoning } from "./feita";
+import { FALHA } from "./historico";
 import { resumir } from "./resumo";
 
 const API_BASE = "https://api.agora.io/api/conversational-ai-agent/v2/projects";
@@ -60,7 +61,7 @@ Se não entender o que a pessoa disse, peça para ela repetir.`;
 
 // SAUDACAO troca a saudação do produtor (scripts/amostras-vozes.sh grava a mesma fala em cada voz).
 const GREETING = process.env.SAUDACAO || "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
-const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
+const FAILURE = FALHA;
 
 /** Quem é o agente: o do produtor (padrão) ou o negociador que liga para o fornecedor. */
 export type Perfil = { rota: string; sistema: string; saudacao: string };

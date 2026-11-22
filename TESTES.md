@@ -585,6 +585,52 @@ pela Agora com o filler de 1000 ms (`audio-demo.sh`, perna do produtor e ligaç�
 - A conversa do produtor com números falados ("dois mil litros", "quinta-feira, dia vinte e seis", "quinze mil
   reais") está em `amostras/vozes-v2/cartesia-alice-produtor-conversa.mp3`, para conferir de ouvido.
 
+## Falhas vistas no teste do dono
+
+#### 18. "Desculpa, tive um probleminha aqui" depois de uma interrupção (22/11/2026)
+
+**Sintoma:** no teste do dono, a agente repetia o `failure_message`. No log, o turno 4 da Agora foi `interrupted` em
+500 ms e logo depois o gateway da feita devolveu 400 `{"type":"invalid_request","message":"Provider returned error"}`
+na rota do produtor (Gemini 3.5 Flash Lite, 6 mensagens, `tool_choice: required`).
+
+**Causa, confirmada direto no gateway:** o Gemini recusa histórico que **termina numa fala do agente** e fala do
+usuário **só com espaço**. As 6 mensagens do log cabem nas duas formas: com a saudação no histórico e a fala vazia
+do usuário descartada pela rota (termina em assistant), ou sem a saudação e com a fala do usuário só com espaço,
+que a rota antiga mantinha. O gateway recusa as duas, e a correção cobre as duas.
+
+| Histórico no gateway | Gemini | Nemotron |
+|---|---|---|
+| termina em assistant | 400 | 200 |
+| user só com espaço no fim | 400 | — |
+| assistant só com espaço no meio | 200 | — |
+| dois user seguidos | 200 | — |
+
+**Correção (`lib/historico.ts`, nas 3 rotas):**
+- Tira mensagens vazias, só com espaço e `null`; junta as seguidas do mesmo papel.
+- Se a conversa não termina numa fala do usuário, o código responde "Desculpa, não peguei. Pode repetir, por favor?"
+  sem chamar o modelo (~3 ms).
+- **Segunda tentativa** (`comReserva` em `lib/feita.ts`): se a 1ª der erro antes de a rota falar algo ou de rodar
+  tool, tenta de novo uma vez com `nvidia/nemotron-3-super-120b-a12b` (`FEITA_MODELO_RESERVA`). No produtor, a 2ª
+  vai sem `tool_choice: required`: com ele o Nemotron levou ~20 s; sem ele, 0,5–0,85 s, e chamou a tool. Só se a
+  2ª também falhar a rota cai na fala de reserva dela (pergunta do que falta, ou o FAILURE).
+- Visto na reprodução: uma vez o Gemini soltou texto degenerado ("ốngống…") e depois "Internal error". O filtro do
+  negociador já cortava o texto; agora a 2ª tentativa também entra nesse caso, porque nada foi falado.
+
+**Testes:**
+- `scripts/historico-interrompido.mjs`: 8 formas de histórico × 3 rotas. Antes: 3 de 9 formas sem resposta no
+  produtor (400). Depois: 48 de 48 ok (2 rodadas). Com `MODELO=google/nao-existe` (1ª tentativa sempre falha):
+  15 de 15 respondidos pelo Nemotron, nenhum FAILURE.
+- `scripts/historico.test.ts` (sem LLM) e os testes de regra e da compra: 28 de 28.
+- `fluxo-texto.mjs 1`: a compra inteira até FECHADA com A. `negociacao-texto.mjs todos`: 7 de 7 casos ok.
+- Voz pela Agora: o produtor interrompe a confirmação no meio ("Espera, espera") e depois diz "pode ligar". Os
+  turnos 3 e 4 terminaram `interrupted`, a agente retomou e a compra começou, sem erro e sem FAILURE. A ligação A
+  também: oferta completa e turno 3 `interrupted`. Mais uma rodada com um ruído de 0,4 s (`anoisesrc`) por cima da
+  confirmação: a Agora não interrompeu nem chamou o LLM. `conversa-texto.mjs`: pedido completo em 3 turnos.
+  Em nenhuma rodada de voz a Agora mandou fala vazia, então o caso exato do dono foi provado em texto e no gateway,
+  não em voz.
+- Limite da 2ª tentativa: no negociador, o Nemotron às vezes não chama `registrar_oferta` ("Posso anotar esse
+  preço?"); a oferta entra no turno seguinte, com o Gemini. Só acontece quando o gateway falha.
+
 ### Gasto
 
 Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.

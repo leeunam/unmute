@@ -5,23 +5,12 @@
 //
 // Regra 3 (nunca fecha sem aprovação explícita): além do modelo, o código exige uma palavra de
 // aprovação na última fala do produtor para aprovar_oferta passar.
-import { isStepCount, streamText, tool, type ModelMessage } from "ai";
+import { isStepCount, streamText, tool } from "ai";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { aprovarOferta, cancelarTarefa, compra, contextoAprovacao, fornecedorNomeado } from "@/lib/compra";
-import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
-
-type OpenAIMessage = { role: string; content: unknown };
-
-function texto(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((p) => (typeof p === "string" ? p : p && typeof p === "object" && "text" in p ? String(p.text) : ""))
-      .join("");
-  }
-  return "";
-}
+import { comReserva, feita, feitaModelId, feitaModeloReserva, feitaReasoning } from "@/lib/feita";
+import { sanear, SEM_FALA, type MensagemOpenAI } from "@/lib/historico";
 
 const PROMPT_APROVACAO = `Você é o assistente de inteligência artificial do Desenrola Agro. Você ligou para dois fornecedores em nome do produtor e acabou de dizer a ele qual oferta recomenda. Agora ele decide.
 Como falar: português do Brasil, jeito simples do interior, frases curtas, sem listas nem símbolos. Valores por extenso.
@@ -47,11 +36,8 @@ export async function POST(req: NextRequest) {
   const created = Math.floor(Date.now() / 1000);
   const turno = body.turn_id ?? "?";
 
-  const messages: ModelMessage[] = [];
-  for (const m of (body.messages ?? []) as OpenAIMessage[]) {
-    const content = texto(m.content);
-    if (content && (m.role === "user" || m.role === "assistant")) messages.push({ role: m.role, content });
-  }
+  // Histórico saneado (lib/historico.ts): sem vazias e com as seguidas do mesmo papel juntas.
+  const { conversa: messages, semFala, ajustes } = sanear((body.messages ?? []) as MensagemOpenAI[]);
   const ultima = messages.at(-1)?.role === "user" ? String(messages.at(-1)!.content) : "";
   const decidindo = compra().estado === "AGUARDANDO_APROVACAO" || compra().estado === "OFERTAS_COLETADAS";
 
@@ -80,8 +66,8 @@ export async function POST(req: NextRequest) {
   };
 
   const passos: string[] = [];
-  const result = streamText({
-    model: feita.chatModel(modelo),
+  const criar = (m: string) => streamText({
+    model: feita.chatModel(m),
     instructions: `${PROMPT_APROVACAO}\n\n${contextoAprovacao()}`,
     messages,
     tools: decidindo ? tools : {},
@@ -89,9 +75,15 @@ export async function POST(req: NextRequest) {
     stopWhen: isStepCount(1),
     maxOutputTokens: body.max_tokens ?? 300,
     abortSignal: req.signal,
-    providerOptions: { feita: { reasoning: feitaReasoning(modelo) } } as never,
-    onError: ({ error }) => console.error("[aprovacao] erro", error),
+    providerOptions: { feita: { reasoning: feitaReasoning(m) } } as never,
+    onError: ({ error }) => console.error("[aprovacao] erro", m, error instanceof Error ? error.message : error),
   });
+  // Se o gateway der erro, uma 2ª tentativa com outro modelo (lib/feita.ts).
+  const partes = (falou: () => boolean) =>
+    comReserva(() => criar(modelo).fullStream, () => criar(feitaModeloReserva()).fullStream, "aprovacao", {
+      signal: req.signal,
+      falou,
+    });
 
   const enc = new TextEncoder();
   const chunk = (delta: Record<string, string>, finish: string | null) =>
@@ -113,7 +105,8 @@ export async function POST(req: NextRequest) {
       };
       try {
         controller.enqueue(chunk({ role: "assistant" }, null));
-        for await (const part of result.fullStream) {
+        // O produtor não disse nada que deu para usar (ex.: logo depois de uma interrupção): pede para repetir.
+        for await (const part of semFala ? [] : partes(() => !!resposta)) {
           const ms = Math.round(performance.now() - t0);
           if (part.type === "tool-call") {
             usouTool = true;
@@ -128,7 +121,8 @@ export async function POST(req: NextRequest) {
           if (part.type !== "text-delta" || !part.text || usouTool) continue;
           falar(part.text);
         }
-        if (falaTool) falar(resposta ? ` ${falaTool}` : falaTool);
+        if (semFala) falar(SEM_FALA);
+        else if (falaTool) falar(resposta ? ` ${falaTool}` : falaTool);
         else if (!resposta) {
           const c = compra();
           falar(
@@ -147,7 +141,7 @@ export async function POST(req: NextRequest) {
         controller.close();
         const ttft = primeiro ? Math.round(primeiro - t0) : -1;
         console.log(
-          `[aprovacao] turno=${turno} modelo=${modelo} estado=${compra().estado} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(resposta)} passos=${JSON.stringify(passos)}`,
+          `[aprovacao] turno=${turno} modelo=${modelo} estado=${compra().estado} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(resposta)} passos=${JSON.stringify(passos)}${ajustes.length ? ` historico=${JSON.stringify(ajustes)}` : ""}`,
         );
       }
     },
