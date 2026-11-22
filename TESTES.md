@@ -5,14 +5,14 @@
 **Pergunta:** o Conversational AI Engine da Agora conversa em português do Brasil com latência boa para a demo?
 **Alvo:** menos de ~1,5 s entre o fim da fala e o início da resposta.
 
-### Configuração testada
+### Configuração padrão (atualizada em 21/11/2026, depois das rodadas da seção 7)
 
 | Peça | Provedor | Por quê |
 |---|---|---|
-| ASR | ARES (nativo da Agora), `pt-BR` | Sem chave, sem salto para outro provedor. Aceita `pt-BR`. |
-| LLM | `google/gemini-3.5-flash-lite` pelo gateway da feita.ai, via nossa rota com AI SDK | O mais rápido até o primeiro token entre os testados (abaixo). |
-| TTS | MiniMax `speech-2.8-turbo`, voz `Portuguese_FriendlyNeighbor`, modo gerenciado | Sem chave, tem dezenas de vozes em português e o TTS mais rápido medido (~0,25 s). |
-| Fim de fala | VAD com 480 ms de silêncio | Fim de fala semântico só existe para inglês e chinês. O padrão é 640 ms. |
+| ASR | Deepgram `nova-3`, `pt-BR`, gerenciado pela Agora | Sem chave. `asr_ttlw` de 300 ms, contra ~370 ms do ARES com o mesmo VAD. |
+| LLM | `nvidia/nemotron-3-super-120b-a12b` pelo gateway da feita.ai, via nossa rota com AI SDK, raciocínio desligado | O mais rápido de ponta a ponta. |
+| TTS | Cartesia `sonic-3.6`, voz multilíngue "Jacqueline" falando `pt`, gerenciado pela Agora | Sem chave. `tts_ttfb` de ~90 ms, o menor medido. |
+| Fim de fala | VAD com 300 ms de silêncio | Ganha ~0,2 s em relação a 480 ms sem cortar frases com pausa. O semântico só existe para inglês e chinês. |
 
 ### Como medir
 
@@ -142,6 +142,72 @@ A Agora suporta OpenAI Realtime (`gpt-realtime`), OpenAI GPT-Live, Gemini Live e
 custom tools (`mllm.tools`). **Nenhum liga só com configuração:** todos pedem chave do próprio fornecedor
 (OpenAI, Google ou xAI). O modo gerenciado da Agora não cobre MLLM, e a feita não tem modelos realtime.
 Não foi testado.
+
+#### 7. Nemotron, VAD de 300 ms e vozes gerenciadas (21/11/2026)
+
+Mesma rodada automática da seção 2: 4 frases em pt-BR e uma mudança por vez.
+
+| Rodada | ASR | LLM | TTS | VAD | e2e média (melhor) | Navegador média | `asr_ttlw` | `llm_ttft` | `tts_ttfb` |
+|---|---|---|---|---|---|---|---|---|---|
+| Base (seção 2) | ARES | Gemini Flash Lite | MiniMax | 480 | 2189 (1991) | 2384 | ~570 | 711–1036 | ~250 |
+| Nemotron | ARES | Nemotron 3 Super | MiniMax | 480 | 1957 (1821) | 2218 | ~555 | 593–963 | ~250 |
+| VAD 300 | ARES | Gemini Flash Lite | MiniMax | 300 | 1921 (1845) | 2354 | ~360 | 752–954 | ~235 |
+| Nemotron + VAD 300 | ARES | Nemotron 3 Super | MiniMax | 300 | 1816 (1690) | 2252 | ~380 | 631–913 | ~237 |
+| + Cartesia | ARES | Nemotron 3 Super | Cartesia sonic-3.6 | 300 | 1724 (1636) | 2054 | ~410 | 582–934 | ~140 |
+| + Fish Audio | ARES | Nemotron 3 Super | Fish Audio s2.1-pro ("adam") | 300 | 1974 (1768) | 2224 | ~365 | 697–1058 | ~220 |
+| + Deepgram | Deepgram nova-3 | Nemotron 3 Super | Cartesia sonic-3.6 | 300 | 1661 (**1364**) | 1996 | 300 | 587–1087 | ~90 |
+| **Padrão novo** (confirmação, sem variáveis) | Deepgram nova-3 | Nemotron 3 Super | Cartesia sonic-3.6 | 300 | **1544** (**1438**) | 1881 | 300 | 597–863 | ~90 |
+
+**Leitura:**
+- **VAD de 300 ms não cortou o usuário.** Todas as rodadas tiveram 4 turnos de voz para 4 frases, e a frase
+  com pausa ("Oi, tudo bem? Eu preciso comprar diesel…") chegou inteira ao LLM.
+- A interrupção do agente continuou funcionando: a frase seguinte cortou a fala dele (`interrupted`).
+- **O padrão novo chega no alvo:** e2e médio de 1,54 s, com 3 de 4 turnos abaixo de 1,61 s. Antes era ~2,2 s.
+- O LLM continua sendo a maior parte variável (0,6–1,1 s). Antes dele, ~0,7 s são fixos:
+  processamento 200, ASR 300 e transporte ~210 ms.
+- Qualidade do Nemotron na voz: entendeu tudo e respondeu no tema. É mais falante que o Gemini e inventa
+  preço ("cerca de seis reais e cinquenta"). O prompt precisa proibir isso nas próximas fases.
+
+**Vozes para ouvir** (em `amostras/`, gravadas da chamada real):
+- `voz-deepgram-nemotron-cartesia.mp3`: padrão novo, Cartesia "Jacqueline". É multilíngue, e falta conferir se o sotaque soa brasileiro.
+- `voz-cartesia.mp3`: a mesma voz, com ASR ARES.
+- `voz-fish.mp3`: Fish Audio "adam", voz da comunidade descrita como sotaque brasileiro claro.
+- `voz-base-minimax.mp3` e `voz-elevenlabs.mp3`: as de antes.
+
+**Recomendação de voz:** Cartesia sonic-3.6, a mais rápida, ~150 ms a menos que MiniMax e Fish.
+Se o dono achar o sotaque estrangeiro, a troca é Fish Audio "adam" com
+`TTS_JSON={"credential_mode":"managed","vendor":"fishaudio","params":{"reference_id":"84c748173dc14017a29c99ff7feb4d32","backend":"s2.1-pro"}}`,
+ao custo de ~0,15 s. Na Fish, as vozes pt-BR mais usadas imitam pessoas reais (Lula, Bolsonaro, Neymar) e foram descartadas.
+
+DeepSeek dos créditos restritos (`deepseek/deepseek-v4.1-flash-1017`, raciocínio desligado): 1932 ms até a
+primeira palavra numa chamada. Lento demais para voz.
+
+#### 8. Tools para o negociador: Nemotron 3 Super contra Gemini Flash Lite (21/11/2026, só texto)
+
+`scripts/teste-tools.mjs`: AI SDK com a tool `registrar_oferta` e a fala do fornecedor
+"Diesel S10 a 6,10 o litro, entrego quinta, frete por minha conta, pago no boleto 28 dias." 5 chamadas por modelo.
+
+| Modelo | Chamou a tool | Argumentos | Fala | 1º evento |
+|---|---|---|---|---|
+| Nemotron 3 Super | 5/5 | Preço 6,1 sempre certo. Em 2/5 copiou "frete por minha conta" na voz do fornecedor. Em 3/5 inventou `observacoes` ("Nenhuma", "negociação realizada via ligação…"). | Longa, narra a tool ("Dê-me um momento enquanto preencho os detalhes"), soa traduzida | 322–654 ms |
+| Gemini 3.5 Flash Lite | 5/5 | 5/5 corretos e padronizados ("Por conta do fornecedor", "Boleto 28 dias") | Curta e natural ("Perfeito, anotei tudo aqui… Um abraço!") | 810–1040 ms |
+
+**Leitura:** os dois servem para tools. O Gemini é mais confiável nos argumentos e soa mais natural. O Nemotron
+é ~0,4 s mais rápido, mas fala demais e precisa de um prompt mais rígido para não narrar a tool nem inventar campos.
+
+### Gasto
+
+Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
+
+| Momento | feita: créditos gerais | feita: DeepSeek | Agora: min de agente acumulados |
+|---|---|---|---|
+| Início do projeto | 200 | 10.000 | 0 |
+| Fim da seção 6 (bake-off) | 189 | 10.000 | ~8 (7 sessões) |
+| Fim das seções 7 e 8 | 189 | 10.000 | ~17 (14 sessões) |
+
+1 crédito ≈ US$ 0,01, pelo custo por pedido que o gateway devolve. O saldo da API vem arredondado:
+as seções 7 e 8 custaram menos de 1 crédito (~60 pedidos de Nemotron e Gemini e 1 de DeepSeek).
+A Agora cobra o agente à parte (US$ 0,10/min, 300 min grátis por mês) do RTC do usuário (US$ 0,00099/min).
 
 ### O que ouvir além do número
 

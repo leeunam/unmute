@@ -58,11 +58,11 @@ npm run medir-llm -- https://<túnel>/api/llm/chat/completions $LLM_PROXY_SECRET
 
 ```
 navegador ──(RTC, áudio)── canal Agora ── agente do Conversational AI Engine
-    │                                       ASR: ARES (Agora), pt-BR
-    │ POST /api/sessao                      TTS: MiniMax (gerenciado pela Agora)
+    │                                       ASR: Deepgram nova-3 pt-BR (gerenciado pela Agora)
+    │ POST /api/sessao                      TTS: Cartesia sonic-3.6 (gerenciado pela Agora)
     ▼                                       LLM: chama a nossa rota ↓
 servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/completions (SSE, formato OpenAI)
-    │                                          AI SDK streamText → gateway da feita.ai
+    │                                          AI SDK streamText → gateway da feita.ai (Nemotron 3 Super)
     └──(REST)── api.agora.io/api/conversational-ai-agent/v2 (join, leave, turns)
 ```
 

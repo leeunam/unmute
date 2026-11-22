@@ -103,11 +103,32 @@ function llmConfig(origin: string) {
   throw new Error(`LLM_PROVIDER inválido: ${provider}. Use "feita-proxy" ou "feita-direto".`);
 }
 
-// ASR nativo da Agora (ARES): sem chave, aceita pt-BR.
-const ASR = { vendor: "ares", language: "pt-BR" };
+// ASR Deepgram nova-3 gerenciado pela Agora (sem chave). Mais rápido que o ARES
+// (asr_ttlw ~300 contra ~370 ms com VAD 300). TESTES.md, seção 7.
+const ASR = {
+  credential_mode: "managed",
+  vendor: "deepgram",
+  params: { url: "wss://api.deepgram.com/v1/listen", model: "nova-3", language: "pt-BR" },
+};
 
 function ttsConfig() {
-  const vendor = process.env.TTS_VENDOR || "minimax";
+  // TTS_JSON troca o bloco tts inteiro (ex.: Cartesia ou Fish Audio gerenciados).
+  if (process.env.TTS_JSON) return JSON.parse(process.env.TTS_JSON);
+  const vendor = process.env.TTS_VENDOR || "cartesia";
+  if (vendor === "cartesia") {
+    // Cartesia sonic-3.6 gerenciado pela Agora (sem chave): tts_ttfb ~90–140 ms, o menor medido.
+    // Voz multilíngue "Jacqueline" falando pt. TESTES.md, seção 7.
+    return {
+      credential_mode: "managed",
+      vendor: "cartesia",
+      params: {
+        model_id: "sonic-3.6",
+        voice: { mode: "id", id: process.env.TTS_VOICE || "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc" },
+        output_format: { container: "raw", sample_rate: 24000 },
+        language: "pt",
+      },
+    };
+  }
   if (vendor === "minimax") {
     // TTS gerenciado pela Agora (MiniMax): sem chave, tem vozes em português.
     return {
@@ -137,7 +158,7 @@ function ttsConfig() {
       },
     };
   }
-  throw new Error(`TTS_VENDOR inválido: ${vendor}. Use "minimax" ou "feita".`);
+  throw new Error(`TTS_VENDOR inválido: ${vendor}. Use "cartesia", "minimax" ou "feita".`);
 }
 
 export function joinBody(channel: string, origin: string) {
@@ -150,16 +171,17 @@ export function joinBody(channel: string, origin: string) {
       remote_rtc_uids: [String(USER_UID)],
       enable_string_uid: false,
       idle_timeout: 60,
-      asr: ASR,
+      // ASR_JSON troca o bloco asr inteiro (ex.: Deepgram gerenciado).
+      asr: process.env.ASR_JSON ? JSON.parse(process.env.ASR_JSON) : ASR,
       llm: llmConfig(origin),
       tts: ttsConfig(),
       // Fim de fala semântico só existe para inglês e chinês; em pt-BR é VAD.
-      // O padrão é 640 ms de silêncio; baixamos para ganhar latência.
+      // O padrão é 640 ms de silêncio; 300 ms ganha ~0,2 s sem cortar frases com pausa (TESTES.md).
       turn_detection: {
         config: {
           end_of_speech: {
             mode: "vad",
-            vad_config: { silence_duration_ms: Number(process.env.VAD_SILENCE_MS || 480) },
+            vad_config: { silence_duration_ms: Number(process.env.VAD_SILENCE_MS || 300) },
           },
         },
       },
