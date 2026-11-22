@@ -177,4 +177,5 @@ O visual fica separado da lógica, para as fases novas encaixarem sem mexer em r
 - `components/ui/`: componentes genéricos de um kit shadcn (cartão, selo de situação com glifo, balão de conversa,
   número animado, skeleton). `lib/utils.ts` tem o `cn`.
 - `components/produtor/`: os blocos da tela do produtor. Recebem tudo por props; a página continua dona do estado.
+- `components/produtor/cartao-oferta.tsx`, `etapas-compra.tsx` e `recomendacao.tsx`: as ofertas com os selos da comparação, as etapas da compra e a frase do agente. O `cartao-compra.tsx` da fase 4 só traduz os dados de `lib/compra.ts` para eles.
 - `components/fornecedor/celular.tsx`: o celular simulado (tocando, conectando, em ligação, parado), também só por props.

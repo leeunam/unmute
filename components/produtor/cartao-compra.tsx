@@ -1,7 +1,9 @@
-import { Handshake } from "@phosphor-icons/react/dist/ssr";
-import { Badge } from "@/components/ui/badge";
+import { Handshake, SealCheck } from "@phosphor-icons/react/dist/ssr";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Tone } from "@/components/ui/tone-variants";
+import { CartaoOferta, type MarcaOferta, type OfertaVisual, type SituacaoLigacao } from "./cartao-oferta";
+import { EtapasCompra, type EtapaCompra } from "./etapas-compra";
+import { Recomendacao } from "./recomendacao";
 
 export type OfertaCompra = {
   preco_unitario?: number;
@@ -31,92 +33,50 @@ export type Compra = {
 
 type Props = { compra: Compra; pedidoCompleto: boolean; onLigar: () => void; onAprovar: (id: string) => void; onCancelar: () => void };
 
-const ESTADO: Record<string, [string, Tone]> = {
-  CRIADA: ["Esperando o pedido", "neutral"],
-  LIGANDO_A: ["Ligando para o A", "info"],
-  LIGANDO_B: ["Ligando para o B", "info"],
-  OFERTAS_COLETADAS: ["Ofertas coletadas", "info"],
-  AGUARDANDO_APROVACAO: ["Aguardando sua aprovação", "warning"],
-  FECHADA: ["Fechada", "success"],
-  CANCELADA: ["Cancelada", "danger"],
+const ETAPA: Record<string, EtapaCompra> = {
+  CRIADA: "pedido",
+  LIGANDO_A: "ligando_a",
+  LIGANDO_B: "ligando_b",
+  OFERTAS_COLETADAS: "aprovacao",
+  AGUARDANDO_APROVACAO: "aprovacao",
+  FECHADA: "fechada",
+  CANCELADA: "cancelada",
 };
-const LIGACAO: Record<string, [string, Tone]> = {
-  tocando: ["Tocando", "info"],
-  em_andamento: ["Em ligação", "info"],
-  encerrada: ["Encerrada", "neutral"],
-  recusada: ["Recusada", "danger"],
-};
-const MARCA: Record<string, [string, Tone]> = {
-  recomendada: ["Recomendada", "success"],
-  fora_do_prazo: ["Fora do prazo", "danger"],
-  acima_do_teto: ["Acima do teto", "danger"],
-  sem_oferta: ["Sem oferta", "danger"],
-};
+const MARCAS: MarcaOferta[] = ["recomendada", "fora_do_prazo", "acima_do_teto", "sem_oferta"];
+const SITUACOES: SituacaoLigacao[] = ["tocando", "em_andamento", "encerrada", "recusada"];
 
 const brl = (n?: number) => (n === undefined ? undefined : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+const total = (n?: number) =>
+  n === undefined ? undefined : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: Number.isInteger(n) ? 0 : 2 });
 const dia = (iso?: string) =>
   iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : undefined;
 
-function Oferta({ id, l, av }: { id: string; l?: LigacaoCompra; av?: Avaliada }) {
+/** Os dados da compra no formato que o cartão de oferta desenha. */
+function paraVisual(id: string, l?: LigacaoCompra, av?: Avaliada): OfertaVisual {
   const o = l?.oferta;
-  const linhas: [string, string | undefined][] = o
-    ? [
-        ["Total com frete", brl(o.total_com_frete)],
-        ["Entrega", o.prazo_entrega ? dia(o.prazo_entrega) : o.prazo_falado ? `vago: "${o.prazo_falado}"` : undefined],
-        ["Frete", o.frete ? `${o.frete}${o.frete_valor ? ` (${brl(o.frete_valor)})` : ""}` : undefined],
-        ["Pagamento", o.pagamento],
-        ["Preço por unidade", o.preco_unitario !== undefined ? `${brl(o.preco_unitario)}${l!.precos.length > 1 ? ` (começou em ${brl(l!.precos[0])})` : ""}` : undefined],
-      ]
-    : [];
-  const st = l && LIGACAO[l.status];
-  return (
-    <div className="rounded-2xl bg-background p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="flex-1 text-[15px] font-semibold">
-          {id.toUpperCase()} · {l?.fornecedor.nome ?? "Fornecedor"}
-        </h3>
-        {st && (
-          <Badge variant="status" tone={st[1]} size="sm">
-            {st[0]}
-          </Badge>
-        )}
-      </div>
-      {av && av.marcas.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {av.marcas.map((m) => (
-            <Badge key={m} variant="status" tone={MARCA[m]?.[1] ?? "neutral"} size="md">
-              {MARCA[m]?.[0] ?? m}
-            </Badge>
-          ))}
-        </div>
-      )}
-      {!l ? (
-        <p className="mt-3 text-sm text-muted-foreground">Ainda não ligou.</p>
-      ) : l.indisponivel ? (
-        <p className="mt-3 text-sm">Indisponível: {l.indisponivel.motivo}</p>
-      ) : (
-        <dl className="mt-2">
-          {linhas.map(([k, v]) => (
-            <div key={k} className="border-t border-border-muted py-2">
-              <dt className="text-[13px] text-muted-foreground">{k}</dt>
-              <dd className="text-[15px] font-semibold tabular-nums">
-                {v ?? <span className="font-normal text-muted-foreground">—</span>}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </div>
-  );
+  const marcas = (av?.marcas ?? []).filter((m): m is MarcaOferta => MARCAS.includes(m as MarcaOferta));
+  if (!av && l?.indisponivel) marcas.push("sem_oferta");
+  return {
+    id,
+    nome: l?.fornecedor.nome ?? `Fornecedor ${id.toUpperCase()}`,
+    situacao: l && SITUACOES.includes(l.status as SituacaoLigacao) ? (l.status as SituacaoLigacao) : "aguardando",
+    total: o?.total_com_frete,
+    precoUnitario: brl(o?.preco_unitario),
+    precoInicial: l && l.precos.length > 1 ? `Começou em ${brl(l.precos[0])} por unidade` : undefined,
+    entrega: o?.prazo_entrega ? dia(o.prazo_entrega) : o?.prazo_falado ? `vago: "${o.prazo_falado}"` : undefined,
+    frete: o?.frete ? `${o.frete}${o.frete_valor ? ` (${brl(o.frete_valor)})` : ""}` : undefined,
+    pagamento: o?.pagamento,
+    marcas,
+    motivo: av?.motivo ?? l?.indisponivel?.motivo,
+  };
 }
 
-/** A compra: o estado, as ofertas de A e B lado a lado com as marcas da comparação e o resultado. */
+/** A compra: as etapas, as ofertas de A e B lado a lado com os selos da comparação e o resultado. */
 export function CartaoCompra({ compra: c, pedidoCompleto, onLigar, onAprovar, onCancelar }: Props) {
   const porId = (id: string) => c.ligacoes.find((l) => l.fornecedor.id === id);
   const av = (id: string) => c.comparacao?.avaliadas.find((a) => a.id === id);
-  const rec = c.comparacao?.recomendada;
   const decidindo = c.estado === "OFERTAS_COLETADAS" || c.estado === "AGUARDANDO_APROVACAO";
-  const [rotulo, tom] = ESTADO[c.estado] ?? [c.estado, "neutral"];
+  const fechadaCom = c.estado === "FECHADA" ? c.fechada_com : undefined;
   return (
     <Card>
       <CardHeader className="flex-row items-center gap-3">
@@ -124,40 +84,57 @@ export function CartaoCompra({ compra: c, pedidoCompleto, onLigar, onAprovar, on
           <Handshake weight="duotone" className="size-5" />
         </span>
         <CardTitle className="flex-1">Compra</CardTitle>
-        <Badge variant="status" tone={tom} size="md">
-          {rotulo}
-        </Badge>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Oferta id="a" l={porId("a")} av={av("a")} />
-          <Oferta id="b" l={porId("b")} av={av("b")} />
-        </div>
-        {c.frase && <p className="text-[15px]">{c.frase}</p>}
-        {c.estado === "FECHADA" && c.fechada_com && (
-          <p className="text-[17px] font-semibold">
-            Fechada com {c.fechada_com.toUpperCase()} · {porId(c.fechada_com)?.fornecedor.nome} · {brl(av(c.fechada_com)?.total)}
+      <CardContent className="space-y-5">
+        <EtapasCompra atual={ETAPA[c.estado] ?? "pedido"} />
+
+        {fechadaCom && (
+          <div className="m-enter flex items-center gap-3 rounded-2xl bg-status-success-bg px-5 py-4 text-status-success-ink">
+            <SealCheck weight="fill" className="size-7 shrink-0" />
+            <p className="text-[17px] font-semibold">
+              Fechada com o {fechadaCom.toUpperCase()} · {porId(fechadaCom)?.fornecedor.nome} ·{" "}
+              <span className="tabular-nums">{total(av(fechadaCom)?.total)}</span>
+            </p>
+          </div>
+        )}
+        {c.estado === "CANCELADA" && (
+          <p className="rounded-2xl bg-status-neutral-bg px-5 py-4 text-[15px] font-medium text-status-neutral-ink">
+            Compra cancelada. Não fechou com ninguém.
           </p>
         )}
-        {c.estado === "CANCELADA" && <p className="text-[17px] font-semibold">Compra cancelada. Não fechou com ninguém.</p>}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {["a", "b"].map((id) => (
+            <CartaoOferta
+              key={id}
+              oferta={paraVisual(id, porId(id), av(id))}
+              fechada={fechadaCom === id}
+              onAprovar={decidindo ? () => onAprovar(id) : undefined}
+            />
+          ))}
+        </div>
+
+        {c.frase && !fechadaCom && <Recomendacao frase={c.frase} />}
+
         <div className="flex flex-wrap items-center gap-3 text-sm">
           {c.estado === "CRIADA" && (
-            <button type="button" className="button-primary m-press rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-50" onClick={onLigar} disabled={!pedidoCompleto}>
+            <Button size="lg" onClick={onLigar} disabled={!pedidoCompleto}>
               Ligar para os fornecedores
-            </button>
-          )}
-          {decidindo && rec && (
-            <button type="button" className="button-primary m-press rounded-full bg-primary px-4 py-2 font-medium text-primary-foreground" onClick={() => onAprovar(rec)}>
-              Aprovar {rec.toUpperCase()}
-            </button>
+            </Button>
           )}
           {decidindo && (
-            <button type="button" className="m-press rounded-full bg-muted px-4 py-2 font-medium" onClick={onCancelar}>
-              Cancelar
-            </button>
+            <Button variant="tertiary" onClick={onCancelar}>
+              Cancelar compra
+            </Button>
           )}
-          <a className="text-primary-ink underline" href="/fornecedor/a" target="_blank" rel="noreferrer">Celular do A</a>
-          <a className="text-primary-ink underline" href="/fornecedor/b" target="_blank" rel="noreferrer">Celular do B</a>
+          <span className="ml-auto flex gap-4">
+            <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/a" target="_blank" rel="noreferrer">
+              Celular do A
+            </a>
+            <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/b" target="_blank" rel="noreferrer">
+              Celular do B
+            </a>
+          </span>
         </div>
       </CardContent>
     </Card>
