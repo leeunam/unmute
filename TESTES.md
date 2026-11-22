@@ -579,9 +579,11 @@ A Agora cobra o agente à parte (US$ 0,10/min, 300 min grátis por mês) do RTC 
 A Agora tem o recurso nativo `properties.filler_words`: se o LLM não manda texto em `response_wait_ms`, ela fala
 uma frase curta da lista, no máximo uma por turno, e a resposta vem depois. A doc não diz se funciona com LLM
 custom, então foi testado: **funciona com a nossa rota.** Nenhum código na rota. Frases em rodízio: "Hum, deixa
-eu ver.", "Só um instante.", "Certo, um minutinho.", "Deixa eu ver aqui.", "Hum, um momento.".
-Limiar padrão de 700 ms (`FILLER_WAIT_MS`, `0` desliga): turno que o código responde na hora (ex.: a pergunta do
-máximo, `llm_ttft` 282 ms) não ouve nada; turno com tool (0,8–1,2 s na nossa rota) ouve.
+eu ver.", "Só um instante.", "Hum, só um minutinho.", "Deixa eu ver aqui.", "Hum, um momento.".
+Limiar padrão de 700 ms (`FILLER_WAIT_MS`, `0` desliga). **Na prática, todo turno que passa pelo LLM ganha filler:**
+8 de 8 nas duas pernas medidas, porque a nossa rota leva 0,7–1,2 s até o 1º texto. Só o turno que o código
+responde na hora (ex.: a pergunta do máximo, `llm_ttft` 282 ms) fica sem. Se soar repetitivo, subir para
+1000–1200 ms deixa só os turnos mais lentos com filler.
 
 Perna do produtor (`scripts/audio-demo.sh`, 3 turnos de voz, todos com `criar_tarefa`), uma rodada por linha.
 O que importa é o **tempo até a primeira voz**, e o navegador mede isso (último som da fala até o primeiro som do agente):
@@ -595,7 +597,6 @@ O que importa é o **tempo até a primeira voz**, e o navegador mede isso (últi
 - A primeira voz chega **~0,44 s antes** com 700 ms. Com o filler, o `llm_ttft` da Agora passa a medir o filler
   (fica cravado no limiar). A resposta de verdade vem depois, no mesmo tempo de antes.
 - Na gravação dá para ver as duas falas: "Hum, deixa eu ver." (~1,3 s), pausa de ~0,3 s e "Quantos litros?".
-- 300 ms dá filler até em turno rápido, o que fica robótico. 700 ms só pega o turno que vai demorar.
 
 Ligação A (`fornecedor-a.wav`, 6 turnos de voz, filler 700 ms): e2e médio 1528 ms. A oferta saiu completa
 (R$ 7,10, quarta, frete do fornecedor, Pix) e **a interrupção continua funcionando**: o turno 3 terminou
@@ -603,6 +604,9 @@ Ligação A (`fornecedor-a.wav`, 6 turnos de voz, filler 700 ms): e2e médio 152
 
 A volta ao produtor abre com a recomendação montada pelo código (sem espera, sem filler); o "fecha" depois dela
 passa pela rota com tool e ganha o filler como qualquer turno lento. Não foi medido à parte.
+
+Para ouvir: `amostras/silencio/produtor-sem-filler.mp3` e `amostras/silencio/produtor-com-filler-700ms.mp3`
+(a frase "Certo, um minutinho." dessa gravação saiu da lista: depois de um preço, "Certo" soa como aceitar).
 
 ### O que ouvir além do número
 

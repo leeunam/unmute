@@ -205,7 +205,7 @@ export function joinBody(channel: string, origin: string, perfil: Perfil = PRODU
         content: {
           mode: "static",
           static_config: {
-            phrases: ["Hum, deixa eu ver.", "Só um instante.", "Certo, um minutinho.", "Deixa eu ver aqui.", "Hum, um momento."],
+            phrases: ["Hum, deixa eu ver.", "Só um instante.", "Hum, só um minutinho.", "Deixa eu ver aqui.", "Hum, um momento."],
             selection_rule: "round_robin",
           },
         },
