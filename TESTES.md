@@ -305,7 +305,7 @@ Tarefa na tela: combustível, 2.000 litros, quinta-feira 26/11, R$ 15.000, "na s
 **Pergunta:** o agente liga, negocia e devolve uma oferta estruturada e confiável, sem nunca revelar o teto e sem
 encerrar antes da hora?
 
-**Como funciona:** veja o README, seção "O negociador nunca recebe o teto". O negociador recebe só o pedido e a meta
+**Como funciona:** veja [`docs/TECNICO.md`](docs/TECNICO.md), seção "O negociador nunca recebe o teto". O negociador recebe só o pedido e a meta
 de R$ 6,75 por litro (10% abaixo dos R$ 7,50 que o teto de R$ 15.000 dá para 2.000 litros). O total, a marca
 "dentro do teto" e o fim da ligação são decididos pelo código.
 
