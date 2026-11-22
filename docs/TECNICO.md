@@ -25,6 +25,13 @@ Em volta disso, quem manda na ligação é o código (`lib/negociacao.ts`), não
 - **Cada frase passa por um filtro antes da voz.** O filtro corta o que fecha negócio ("fechado", "pode mandar") e
   a despedida antes da oferta completa ("vou confirmar e retorno"); nesse caso, o código pergunta o que falta. Corta
   também qualquer forma do teto e texto degenerado do modelo ("ốngốngống…", visto uma vez nos testes).
+- **A pergunta do máximo é respondida pelo código.** O negociador não sabe se o produtor tem limite, então qualquer
+  resposta do modelo seria inventada (já saiu "ele não estipulou limite"). Quando o fornecedor só pergunta quanto o
+  produtor paga, a rota responde sem LLM: "Isso eu não tenho aqui, mas me passa o melhor preço do senhor que eu levo
+  pra ele." Se ele já deu preço, a frase pede o que falta. O filtro também corta qualquer frase do modelo que fale de
+  limite, teto, orçamento, valor máximo ou "pode cobrar", e põe a frase do código no lugar.
+- **Depois da leitura, o "ok" encerra.** Se o fornecedor confirma e o modelo registra a mesma oferta de novo, o código
+  se despede em vez de ler outra vez.
 - **A despedida também é do código:** "vou passar pro produtor e, se ele aprovar, eu retorno". O agente nunca fecha
   negócio.
 

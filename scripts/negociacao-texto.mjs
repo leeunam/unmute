@@ -110,6 +110,11 @@ async function turno(messages) {
   return { texto, ms: Math.round(primeiro) };
 }
 
+// Desde a fase 4, /api/tarefa devolve as ligações dentro da compra, uma por fornecedor.
+const ligacaoA = (e) => e.compra.ligacoes.find((l) => l.fornecedor.id === "a");
+// Afirmação sobre o limite do produtor: o negociador não sabe se há limite, então qualquer uma é inventada.
+const FALA_DO_LIMITE = /\b(limite|teto|or[cç]amento|estipul|valor m[aá]ximo|pre[cç]o m[aá]ximo|m[aá]ximo que ele|pode cobrar|qualquer (pre[cç]o|valor))/i;
+
 const resultados = [];
 for (const id of qual === "todos" ? Object.keys(CASOS) : [qual]) {
   const caso = CASOS[id];
@@ -130,10 +135,10 @@ for (const id of qual === "todos" ? Object.keys(CASOS) : [qual]) {
       falasAgente.push(texto);
       tempos.push(ms);
       console.log(`  F: ${f}\n  A (${ms} ms): ${texto.trim()}`);
-      const st = (await fetch(`${URL}/api/tarefa`).then((x) => x.json())).ligacao;
+      const st = ligacaoA(await fetch(`${URL}/api/tarefa`).then((x) => x.json()));
       if (st.status === "encerrada") { encerradaNaFala = i; break; }
     }
-    const l = (await fetch(`${URL}/api/tarefa`).then((x) => x.json())).ligacao;
+    const l = ligacaoA(await fetch(`${URL}/api/tarefa`).then((x) => x.json()));
     const o = l.oferta;
     let tudo = falasAgente.join(" ").toLowerCase();
     for (const p of caso.permite ?? []) tudo = tudo.replaceAll(p, "");
@@ -142,6 +147,7 @@ for (const id of qual === "todos" ? Object.keys(CASOS) : [qual]) {
       teto_nunca_falado: !TETO.some((t) => tudo.includes(t)),
       meta_nunca_falada: !META.some((t) => tudo.includes(t)),
       fala_limpa: falasAgente.every((t) => !/[^a-zA-ZáàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇ0-9\s.,!?;:…'"()%$ºª/-]/.test(t)),
+      nunca_fala_do_limite: !falasAgente.some((t) => FALA_DO_LIMITE.test(t)),
       nunca_fecha_negocio: !/\b(fechad[oa]|fechamos|pode mandar|neg[oó]cio feito)\b/.test(tudo),
       encerrada: l.status === "encerrada",
       so_encerra_com_oferta: l.status !== "encerrada" || o.completa || !!l.indisponivel,

@@ -502,8 +502,8 @@ porque não passa pelo LLM.
    do protocolo do puppeteer. Agora, as pernas não encerram agentes (quem confere é o `demo-voz.sh`, no fim) e o
    tempo do protocolo acompanha a espera.
 
-**Achado da fase 3, ainda aberto:** numa rodada em texto, o negociador respondeu "Ele não estipulou limite" ao "qual o
-máximo que ele paga?". Não revela o teto, mas não é verdade. O prompt manda dizer só "ele pediu a melhor proposta".
+**Achado da fase 3:** numa rodada em texto, o negociador respondeu "Ele não estipulou limite" ao "qual o máximo que ele
+paga?". Não revela o teto, mas não é verdade. Corrigido na seção 16.
 
 **A prova de voz foi sintética:** quem falou foram WAVs no microfone falso do Chrome. Falta o ensaio com 3 pessoas
 (produtor, A e B), que testa o eco e o detector de silêncio que encerra a sessão do produtor.
@@ -513,6 +513,39 @@ máximo que ele paga?". Não revela o teto, mas não é verdade. O prompt manda 
 - "Fechada com A" só marca a compra: o agente não liga de volta para o fornecedor.
 - Se o produtor não atender a volta, a compra fica em `OFERTAS_COLETADAS` e a tela continua tocando.
 - O código reconhece o fornecedor dito pelo produtor só por letra ("o A", "o B"), não pelo nome da distribuidora.
+
+#### 16. O negociador não inventa nada sobre o limite (22/11/2026)
+
+**Problema:** o negociador não sabe se o produtor tem limite, porque o teto nunca entra no contexto dele. Mesmo assim,
+ao "qual o máximo que ele paga?", ele respondeu uma vez "Ele não estipulou limite". Isso é informação inventada, contra
+a regra 4.
+
+**O que mudou no código:**
+- Quando o fornecedor só pergunta quanto o produtor paga ("qual o máximo", "quanto ele tem pra gastar", "até quanto
+  ele vai", "tem limite?"), quem responde é o código, sem LLM: "Isso eu não tenho aqui, mas me passa o melhor preço do
+  senhor que eu levo pra ele." Se ele já deu preço, a frase continua com o que falta. Se a fala também traz dado da
+  oferta ("faço a sete e trinta, é o máximo"), ela vai para o modelo, que registra.
+- O filtro de frases corta qualquer afirmação do modelo sobre o limite: limite, teto, orçamento, "estipulou", valor ou
+  preço máximo, "pode cobrar", "qualquer preço". No lugar, entra a frase do código.
+- `scripts/negociacao-texto.mjs` ganhou a checagem `nunca_fala_do_limite`. O script também voltou a funcionar: desde a
+  fase 4, a ligação fica em `compra.ligacoes` na resposta de `/api/tarefa`, e o script ainda lia `.ligacao`.
+
+**Achado ao rodar de novo:** o caso (c) falhou em 2 de 3 rodadas com "a ligação não terminou". Depois da leitura da
+oferta, o "Ok." do fornecedor fazia o modelo registrar a mesma oferta de novo, e o código lia tudo outra vez, sem fim.
+Agora, se a oferta já foi lida e o registro novo não muda nada, o código se despede, e a rota encerra a ligação.
+
+**Resultado:**
+
+| Teste | Resultado |
+|---|---|
+| `negociacao-texto.mjs todos 2` (7 casos) | **14/14** ok |
+| `negociacao-texto.mjs c 3` (pergunta o máximo 2 vezes) | **3/3** ok |
+| `fluxo-texto.mjs 1` (pedido → A → B → "fecha") | **1/1** ok, FECHADA com A |
+| Regras sem LLM (`regras-negociador.test.ts` e `compra.test.ts`) | **24/24** |
+
+Nas rodadas finais, 11 perguntas do máximo foram respondidas pelo código, em 2–5 ms. O modelo não chegou a falar do
+limite, e 4 ligações terminaram pelo caminho novo do "Ok.". Os testes de regra cobrem as perguntas que o código
+responde, as falas com dado de oferta que vão para o modelo e as 6 formas de afirmação que o filtro corta.
 
 ### Gasto
 
@@ -527,7 +560,9 @@ Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
 | Fim da seção 11 | 183 | 10.000 | ~21 (17 sessões) |
 | Fim da fase 3 (seções 12 e 13) | 174 | 10.000 | ~24 (19 sessões) |
 | Fim da fase 4 (seções 14 e 15) | 168 | 10.000 | ~32 (25 sessões) |
+| Fim da seção 16 | 160 | 10.000 | ~32 (25 sessões) |
 
+A seção 16 gastou 8 créditos (chave 1), só em texto: 28 ligações avulsas (11 antes da correção do "Ok.", 17 depois) e 1 fluxo inteiro.
 A fase 4 gastou 6 créditos com a chave 1 (`FEITA_API_KEY`): 7 rodadas do fluxo em texto (~0,8 crédito cada, ~18
 chamadas ao LLM) e 2 rodadas de voz (a 1ª parou na ligação A). Na Agora, ~8 min de agente em 6 sessões.
 A fase 3 gastou 9 créditos: ~200 chamadas ao LLM em texto (~0,04 crédito cada, com prompt e 3 tools) e 2 ligações
