@@ -143,9 +143,10 @@ servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/co
 O visual fica separado da lógica, para as fases novas encaixarem sem mexer em regra:
 
 - `app/globals.css`: Tailwind 4 e os tokens do tema claro (fundo quente, sálvia, cores de situação, raios, sombras,
-  movimento de 140–240 ms). As classes antigas (`section`, `.ind`, `.marca`, `.celular`…) ficam em `@layer base`,
+  movimento de 140–240 ms). As classes antigas (`section`, `.ind`, `.marca`…) ficam em `@layer base`,
   apontando para os mesmos tokens, então uma tela que ainda usa essas classes já sai com o tema.
 - `app/layout.tsx`: a fonte IBM Plex Sans (`next/font`).
 - `components/ui/`: componentes genéricos de um kit shadcn (cartão, selo de situação com glifo, balão de conversa,
   número animado, skeleton). `lib/utils.ts` tem o `cn`.
 - `components/produtor/`: os blocos da tela do produtor. Recebem tudo por props; a página continua dona do estado.
+- `components/fornecedor/celular.tsx`: o celular simulado (tocando, conectando, em ligação, parado), também só por props.
