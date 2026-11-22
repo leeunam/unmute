@@ -7,4 +7,5 @@ COPY . .
 RUN npm run build
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["npx", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+# Sem npx: o sinal de parada chega direto ao Next (o npx registrava SIGTERM como erro).
+CMD ["node_modules/.bin/next", "start", "-H", "0.0.0.0", "-p", "3000"]
