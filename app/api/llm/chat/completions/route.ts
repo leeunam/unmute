@@ -2,11 +2,12 @@
 // https://docs.agora.io/en/ai/build/custom-model-integration/custom-llm
 // Por dentro usa o AI SDK (streamText) com a feita.ai. A tool criar_tarefa
 // roda aqui, em vários passos; a Agora só recebe o texto em streaming.
-import { isStepCount, streamText, tool, type ModelMessage } from "ai";
+import { isStepCount, streamText, tool } from "ai";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { compra, iniciarLigacoes } from "@/lib/compra";
-import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
+import { comReserva, feita, feitaModelId, feitaModeloReserva, feitaReasoning } from "@/lib/feita";
+import { FALHA, sanear, SEM_FALA, type MensagemOpenAI } from "@/lib/historico";
 import {
   aplicarCriarTarefa,
   criarTarefaSchema,
@@ -17,31 +18,13 @@ import {
   registrarConversa,
 } from "@/lib/tarefa";
 
-type OpenAIMessage = { role: string; content: unknown };
-
-function texto(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    return content
-      .map((p) => (typeof p === "string" ? p : p && typeof p === "object" && "text" in p ? String(p.text) : ""))
-      .join("");
-  }
-  return "";
-}
-
 // O AI SDK 7 quer o prompt de sistema em `instructions`, fora de `messages`.
-function paraAiSdk(messages: OpenAIMessage[]) {
-  const sistema: string[] = [];
-  const conversa: ModelMessage[] = [];
-  for (const m of messages) {
-    const content = texto(m.content);
-    if (!content) continue;
-    if (m.role === "system") sistema.push(content);
-    else if (m.role === "user" || m.role === "assistant") conversa.push({ role: m.role, content });
-  }
+// O histórico vem saneado (lib/historico.ts): sem vazias e com as seguidas do mesmo papel juntas.
+function paraAiSdk(messages: MensagemOpenAI[]) {
+  const { sistema, conversa, semFala, ajustes } = sanear(messages);
   // Prompt da Agora + regras do pedido + estado da tarefa (o modelo não vê as tool calls antigas).
   sistema.push(PROMPT_PRODUTOR, estadoParaPrompt());
-  return { instructions: sistema.join("\n\n"), messages: conversa };
+  return { instructions: sistema.join("\n\n"), messages: conversa, semFala, ajustes };
 }
 
 const criarTarefa = tool({
@@ -76,7 +59,7 @@ export async function POST(req: NextRequest) {
   const created = Math.floor(Date.now() / 1000);
   const turno = body.turn_id ?? "?";
 
-  const entrada = paraAiSdk(body.messages ?? []);
+  const { semFala, ajustes, ...entrada } = paraAiSdk(body.messages ?? []);
   registrarConversa(
     entrada.messages.map((m) => ({ quem: m.role === "user" ? "produtor" : "agente", texto: String(m.content) })),
   );
@@ -85,21 +68,29 @@ export async function POST(req: NextRequest) {
   // Depois de a compra começar, o pedido não muda mais: só conversa.
   const emCompra = compra().estado !== "CRIADA";
   if (emCompra) entrada.instructions += `\n\nAs ligações já começaram (${compra().estado}). Diga em uma frase que está ligando pros fornecedores e volta com a melhor proposta.`;
-  const result = streamText({
-    model: feita.chatModel(modelo),
+  const criar = (m: string, reserva = false) => streamText({
+    model: feita.chatModel(m),
     ...entrada,
     tools: forcarTool ? { criar_tarefa: criarTarefa } : emCompra ? {} : { criar_tarefa: criarTarefa, ligar_fornecedores: ligarFornecedores },
     // O código decide, não o modelo: enquanto a tarefa estiver incompleta, o modelo é
     // obrigado a chamar criar_tarefa (sem isso o Nemotron pulava a tool e inventava o
     // produto). Um passo só: quem fala depois da tool é o código (resultado.fala), sem
     // a segunda chamada ao LLM. Economiza ~0,5–0,7 s por turno com tool.
-    toolChoice: forcarTool ? "required" : "auto",
+    // Na 2ª tentativa (outro modelo), sem "required": com ele o Nemotron levou ~20 s. Se ele não chamar a
+    // tool, quem fala é o código (proximaPergunta).
+    toolChoice: forcarTool && !reserva ? "required" : "auto",
     stopWhen: isStepCount(1),
     maxOutputTokens: body.max_tokens ?? 300,
     abortSignal: req.signal,
-    providerOptions: { feita: { reasoning: feitaReasoning(modelo) } } as never,
-    onError: ({ error }) => console.error("[llm] erro", error),
+    providerOptions: { feita: { reasoning: feitaReasoning(m) } } as never,
+    onError: ({ error }) => console.error("[llm] erro", m, error instanceof Error ? error.message : error),
   });
+  // Se o gateway der erro, uma 2ª tentativa com outro modelo (lib/feita.ts).
+  const partes = (falou: () => boolean) =>
+    comReserva(() => criar(modelo).fullStream, () => criar(feitaModeloReserva(), true).fullStream, "llm", {
+      signal: req.signal,
+      falou,
+    });
 
   const enc = new TextEncoder();
   const chunk = (delta: Record<string, string>, finish: string | null) =>
@@ -125,7 +116,8 @@ export async function POST(req: NextRequest) {
       };
       try {
         controller.enqueue(chunk({ role: "assistant" }, null));
-        for await (const part of result.fullStream) {
+        // O usuário não disse nada que deu para usar (ex.: logo depois de uma interrupção): pede para repetir.
+        for await (const part of semFala ? [] : partes(() => !!resposta)) {
           const ms = Math.round(performance.now() - t0);
           if (part.type === "finish-step") passos.push(`fim_passo@${ms}`);
           if (part.type === "tool-call") passos.push(`tool@${ms} ${JSON.stringify(part.input)}`);
@@ -138,8 +130,10 @@ export async function POST(req: NextRequest) {
           if (part.type !== "text-delta" || !part.text || forcarTool) continue;
           falar(part.text);
         }
-        if (falaTool) falar(resposta ? ` ${falaTool}` : falaTool);
+        if (semFala) falar(SEM_FALA);
+        else if (falaTool) falar(resposta ? ` ${falaTool}` : falaTool);
         else if (forcarTool) falar(proximaPergunta());
+        else if (!resposta) falar(FALHA); // as duas tentativas falharam
         registrarConversa([
           ...entrada.messages.map((m) => ({
             quem: m.role === "user" ? ("produtor" as const) : ("agente" as const),
@@ -155,7 +149,7 @@ export async function POST(req: NextRequest) {
         controller.close();
         const ttft = primeiro ? Math.round(primeiro - t0) : -1;
         console.log(
-          `[llm] turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(resposta)} passos=${JSON.stringify(passos)}`,
+          `[llm] turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(resposta)} passos=${JSON.stringify(passos)}${ajustes.length ? ` historico=${JSON.stringify(ajustes)}` : ""}`,
         );
       }
     },

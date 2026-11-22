@@ -25,3 +25,43 @@ export function feitaReasoning(modelo: string): Record<string, unknown> {
   const obrigatorio = /^google\/|claude-(sonnet|opus|fable)/.test(modelo);
   return obrigatorio ? { effort: "minimal" } : { enabled: false };
 }
+
+/** Modelo da 2ª tentativa, quando o gateway dá erro na 1ª: outro provedor, rápido e sem raciocínio. */
+export function feitaModeloReserva() {
+  return process.env.FEITA_MODELO_RESERVA || "nvidia/nemotron-3-super-120b-a12b";
+}
+
+/**
+ * Rede de segurança das rotas de LLM: repassa as partes do stream da 1ª tentativa. Se ela der erro (ex.: 400 do
+ * gateway, ou "Internal error" depois de texto degenerado) antes de a rota falar qualquer coisa e antes de
+ * qualquer tool, tenta uma vez de novo com `segunda` (outro modelo). `recomecar` limpa o que a rota juntou da 1ª.
+ * Se a 2ª também falhar, a rota cai na fala de reserva dela. Interrupção (abort) não tenta de novo.
+ */
+export async function* comReserva<P extends { type: string }>(
+  primeira: () => AsyncIterable<P>,
+  segunda: () => AsyncIterable<P>,
+  rotulo: string,
+  op: { signal?: AbortSignal; falou: () => boolean; recomecar?: () => void },
+): AsyncGenerator<P> {
+  let usouTool = false;
+  let erro: unknown = undefined;
+  const podeRepetir = () => !usouTool && !op.falou();
+  try {
+    for await (const p of primeira()) {
+      if (p.type === "error" && podeRepetir()) {
+        erro = (p as unknown as { error: unknown }).error;
+        break;
+      }
+      if (p.type === "tool-call") usouTool = true;
+      yield p;
+    }
+  } catch (e) {
+    if (!podeRepetir()) throw e;
+    erro = e;
+  }
+  if (erro === undefined || op.signal?.aborted) return;
+  const motivo = erro instanceof Error ? erro.message : String(erro);
+  console.error(`[${rotulo}] 1ª tentativa falhou (${motivo}); 2ª com ${feitaModeloReserva()}`);
+  op.recomecar?.();
+  yield* segunda();
+}
