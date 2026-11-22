@@ -4,6 +4,8 @@
 # "easypanel" e uma rota no Traefik com HTTPS (Let's Encrypt) em https://desenrola.daviduarte.com.br.
 # As chaves saem do .env.local e ficam só em /root/desenrola/app.env na VPS (fora da imagem).
 # Uso: ./scripts/deploy-vps.sh   (sobe o HEAD commitado; mudança não commitada não vai)
+# DNS público no serviço: com o DNS padrão do container, cada consulta à feita levava 4–11 s (o LLM ia de
+# ~0,9 s para ~5 s por turno). Com 1.1.1.1, ~0,2 s.
 # Para desfazer na VPS: docker service rm desenrola_app; rm /etc/easypanel/traefik/config/desenrola.yaml
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -25,6 +27,7 @@ set -e
 docker service rm desenrola_app >/dev/null 2>&1 && sleep 3 || true
 docker service create -q --name desenrola_app --network easypanel --replicas 1 \
   --env-file /root/desenrola/app.env \
+  --dns 1.1.1.1 --dns 8.8.8.8 \
   --label criado-por=claude-fora-do-easypanel --label projeto=desenrola-agro \
   $TAG
 REMOTO
