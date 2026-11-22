@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { resumir, type Resumo } from "@/lib/resumo";
 import type { IAgoraRTCClient, IMicrophoneAudioTrack, IRemoteAudioTrack } from "agora-rtc-sdk-ng";
-import { Plant } from "@phosphor-icons/react/dist/ssr";
+import { DeviceMobile, Plant } from "@phosphor-icons/react/dist/ssr";
+import { buttonVariants } from "@/components/ui/button";
 import { ChamadaHero } from "@/components/produtor/chamada-hero";
 import { ConversaAoVivo } from "@/components/produtor/conversa-ao-vivo";
 import { CartaoPedido } from "@/components/produtor/cartao-pedido";
@@ -314,14 +315,23 @@ export default function Home() {
 
   return (
     <main className="tela mx-auto max-w-[1360px] px-6 pt-6 pb-16 xl:px-10">
-      <header className="mb-5 flex items-center gap-3">
+      <header className="mb-5 flex flex-wrap items-center gap-3">
         <span className="grid size-10 place-items-center rounded-xl bg-surface-accent text-primary-ink">
           <Plant weight="duotone" className="size-6" />
         </span>
-        <div>
+        <div className="min-w-0 flex-1 basis-72">
           <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.015em]">Desenrola Agro</h1>
           <p className="text-sm text-muted-foreground">Fale o que precisa comprar. O agente anota o pedido e pergunta o que faltar.</p>
         </div>
+        {/* Os celulares simulados dos fornecedores, sempre à mão (abrem em nova aba). */}
+        <nav aria-label="Celulares dos fornecedores" className="ml-auto flex shrink-0 gap-2">
+          {(["a", "b"] as const).map((id) => (
+            <a key={id} href={`/fornecedor/${id}`} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "tertiary", size: "sm" })}>
+              <DeviceMobile weight="duotone" />
+              Celular do {id.toUpperCase()}
+            </a>
+          ))}
+        </nav>
       </header>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] xl:gap-8">

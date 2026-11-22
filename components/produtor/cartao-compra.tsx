@@ -84,14 +84,6 @@ export function CartaoCompra({ compra: c, pedidoCompleto, onLigar, onAprovar, on
           <Handshake weight="duotone" className="size-5" />
         </span>
         <CardTitle className="flex-1">Compra</CardTitle>
-        <span className="flex gap-4 text-sm">
-          <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/a" target="_blank" rel="noreferrer">
-            Celular do A
-          </a>
-          <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/b" target="_blank" rel="noreferrer">
-            Celular do B
-          </a>
-        </span>
       </CardHeader>
       <CardContent className="space-y-4">
         <EtapasCompra atual={ETAPA[c.estado] ?? "pedido"} />
