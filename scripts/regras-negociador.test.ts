@@ -8,8 +8,10 @@ import {
   encerrarLigacao,
   marcarIndisponivel,
   novaLigacao,
+  perguntouLimite,
   PROMPT_NEGOCIADOR,
   registrarOferta,
+  respostaLimite,
   type Ligacao,
 } from "../lib/negociacao";
 import { normalizarPrazo, resetar } from "../lib/tarefa";
@@ -135,4 +137,56 @@ test("frete por conta do fornecedor sem frete_valor vira frete 0", () => {
   fornecedorDisse(l, "Frete por minha conta.");
   registrarOferta(l, { frete: "por conta do fornecedor" });
   assert.equal(l.oferta.frete_valor, 0);
+});
+
+test("pergunta do máximo: quem responde é o código, e só quando é só a pergunta", () => {
+  for (const f of [
+    "Antes de te passar o preço, qual é o máximo que ele paga?",
+    "Ah, fala aí quanto ele tem pra gastar, só assim eu te passo.",
+    "Até quanto ele vai?",
+    "Ele tem um limite?",
+    "Qual o orçamento dele?",
+  ])
+    assert.ok(perguntouLimite(f), f);
+  for (const f of [
+    "Faço a sete e trinta, é o máximo que eu baixo.",
+    "Entrego no máximo na quarta.",
+    "Faço a 7,30 o litro.",
+    "Pix à vista.",
+  ])
+    assert.ok(!perguntouLimite(f), f);
+  const l = ligar();
+  assert.equal(respostaLimite(l), "Isso eu não tenho aqui, mas me passa o melhor preço do senhor que eu levo pra ele.");
+  fornecedorDisse(l, "Faço a seis e vinte.");
+  registrarOferta(l, { preco_unitario: 6.2 });
+  assert.match(respostaLimite(l), /^Isso eu não tenho aqui\. Eu levo a proposta do senhor pra ele\. E pra entregar/);
+});
+
+test("o filtro corta qualquer afirmação do modelo sobre o limite (regra 4: ele não sabe)", () => {
+  const l = ligar();
+  for (const f of [
+    "Ele não estipulou limite, quer a melhor proposta do senhor.",
+    "Não tem limite não.",
+    "Pode cobrar o que achar justo.",
+    "O orçamento dele é bom.",
+    "Ele não me passou um valor máximo.",
+    "Qualquer preço serve.",
+  ])
+    assert.deepEqual(conferirFrase(l, f), { ok: false, motivo: "limite" }, f);
+  assert.deepEqual(conferirFrase(l, "Quanto o senhor faz o litro?"), { ok: true });
+  assert.deepEqual(conferirFrase(l, "Ele pediu a melhor proposta do senhor."), { ok: true });
+});
+
+test("depois da leitura, registrar a mesma oferta de novo despede em vez de ler outra vez", () => {
+  const l = ligar();
+  fornecedorDisse(l, "Faço a seis e dez, mais que isso não dá. Entrego na quarta, pode contar. Frete por minha conta. Pix à vista.");
+  const lida = registrarOferta(l, { preco_unitario: 6.1, prazo_entrega: "quarta", frete: "por minha conta", frete_valor: 0, pagamento: "pix à vista" }) as { acao: string };
+  assert.equal(lida.acao, "leitura");
+  fornecedorDisse(l, "Ok.");
+  const r = registrarOferta(l, { pagamento: "pix à vista" }) as { acao: string; fala: string };
+  assert.equal(r.acao, "confirmada");
+  assert.match(r.fala, /até mais/);
+  // Se ele corrigir algo, lê de novo.
+  fornecedorDisse(l, "Na verdade é boleto.");
+  assert.equal((registrarOferta(l, { pagamento: "boleto" }) as { acao: string }).acao, "leitura");
 });

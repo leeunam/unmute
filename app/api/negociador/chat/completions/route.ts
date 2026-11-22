@@ -24,10 +24,12 @@ import {
   ligacao,
   marcarIndisponivel,
   perguntaQueFalta,
+  perguntouLimite,
   podeEncerrar,
   PROMPT_NEGOCIADOR,
   registrarOferta,
   registrarOfertaSchema,
+  respostaLimite,
   saudacao,
   type Ligacao,
 } from "@/lib/negociacao";
@@ -126,6 +128,18 @@ export async function POST(req: NextRequest) {
   if (l.oferta.completa) l.turnos_com_oferta_completa++;
   const passos: string[] = [];
 
+  // "Qual o máximo que ele paga?": o negociador não sabe (o teto não está no contexto). Quem responde é o
+  // código, sem LLM, para o modelo não inventar ("ele não estipulou limite"). Regra 4.
+  if (perguntouLimite(l.ultima_fala_fornecedor)) {
+    const fala = respostaLimite(l);
+    l.conversa = [
+      ...msgs.map((m) => ({ quem: m.role === "user" ? ("fornecedor" as const) : ("agente" as const), texto: String(m.content) })),
+      { quem: "agente" as const, texto: fala },
+    ];
+    console.log(`[negociador] fornecedor=${l.fornecedor.id} turno=${turno} limite_pelo_codigo resposta=${JSON.stringify(fala)}`);
+    return resposta(async (falar) => falar(fala));
+  }
+
   const result = streamText({
     model: feita.chatModel(modelo),
     instructions: `${PROMPT_NEGOCIADOR}\n\n${contextoNegociador(l)}`,
@@ -164,6 +178,11 @@ export async function POST(req: NextRequest) {
       if (!v.ok) {
         bloqueios.push(`${v.motivo}: ${frase.trim()}`);
         if (v.motivo === "despedida_cedo") l.saidas_bloqueadas++;
+        // O modelo falou do limite: no lugar, a frase do código (uma vez só).
+        if (v.motivo === "limite" && !bloqueios.some((b) => b.startsWith("trocada"))) {
+          bloqueios.push("trocada: limite");
+          falar(respostaLimite(l));
+        }
         return;
       }
       if (ehDespedida(frase)) despediuSe = true;

@@ -211,7 +211,7 @@ O que fazer:
 
 Regras que nunca quebram:
 - Você não fecha negócio. Nunca diga "fechado", "pode mandar" nem aceite em nome do produtor. Quem decide é ele: você leva a proposta.
-- Nunca fale de valor máximo, orçamento, teto, limite ou meta do produtor, nem para dizer que não tem. Se perguntarem quanto ele paga, diga que ele pediu a melhor proposta do senhor e pergunte o preço de novo.
+- Nunca fale de valor máximo, orçamento, teto, limite ou meta do produtor, nem para dizer que não tem. Você não sabe se ele tem limite. Se perguntarem quanto ele paga, diga só que isso você não tem aí e peça o melhor preço do senhor.
 - Nunca invente dado: tipo exato do produto, quantidade, endereço, CNPJ, nome do produtor, forma de pagamento. Se perguntarem algo fora do pedido, diga que confirma com o produtor depois.
 - Se não entender, peça para repetir.`;
 
@@ -294,6 +294,7 @@ function precoDito(l: Ligacao, preco: number, total?: number) {
 
 export function registrarOferta(l: Ligacao, e: z.infer<typeof registrarOfertaSchema>) {
   const o = l.oferta;
+  const antes = JSON.stringify(o);
   const p = l.pedido;
   const erros: string[] = [];
   const inventado: string[] = []; // o modelo passou algo que o fornecedor não disse: descarta
@@ -370,6 +371,11 @@ export function registrarOferta(l: Ligacao, e: z.infer<typeof registrarOfertaSch
   } else if (!o.completa) {
     acao = `pergunta_${o.faltando[0]}`;
     fala.push(perguntaQueFalta(l));
+  } else if (l.lida && JSON.stringify(o) === antes) {
+    // Já leu a oferta e ele só confirmou ("Ok."): ler de novo prendia a ligação num laço. O código se despede,
+    // e a rota encerra (despedida com a oferta completa).
+    acao = "confirmada";
+    fala.push(despedida(l));
   } else {
     acao = "leitura";
     l.lida = true;
@@ -471,7 +477,34 @@ export function formasDoTeto(l: Ligacao): string[] {
   return [...formasDoValor(t), ...formasDoValor(centavos(t / l.pedido.quantidade))];
 }
 
-export type Veredito = { ok: true } | { ok: false; motivo: "lixo" | "teto" | "fecha_negocio" | "despedida_cedo" };
+export type Veredito = { ok: true } | { ok: false; motivo: "lixo" | "teto" | "limite" | "fecha_negocio" | "despedida_cedo" };
+
+// ---------- o limite do produtor (regra 4) ----------
+// O negociador não sabe se o produtor tem limite: o teto nunca entra no contexto. Qualquer coisa que ele
+// diga sobre isso é inventada ("ele não estipulou limite", "pode cobrar"). Por isso:
+// - quando o fornecedor pergunta o máximo, quem responde é o código, sem LLM (respostaLimite);
+// - o filtro corta qualquer frase do modelo que fale de limite, teto, orçamento ou valor máximo.
+
+const QUANTO_ELE = /\b(at[eé] quanto|quanto (ele|o produtor|o patr[aã]o|o cliente|voc[eê]s?|o senhor) (paga|pagaria|pode|tem|quer|vai|topa|t[aá]))/;
+const PALAVRA_LIMITE = /\b(m[aá]ximo|or[cç]amento|teto|limite|pra gastar)\b/;
+const TEM_PERGUNTA = /\?|\b(qual|quanto|tem|fala|diz|passa)\b/;
+// Se a fala já traz dado da oferta ("faço a sete e trinta, é o máximo"), o modelo precisa registrar: não é só a pergunta.
+const DADO_DE_OFERTA = /\d|\b(reais|real|segunda|ter[cç]a|quarta|quinta|sexta|s[aá]bado|domingo|amanh[aã]|pix|boleto|frete|fa[cç]o|sai a|sai por|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\b/;
+
+/** O fornecedor só perguntou quanto o produtor pode pagar. */
+export function perguntouLimite(fala: string) {
+  const s = fala.toLowerCase();
+  return (QUANTO_ELE.test(s) || (PALAVRA_LIMITE.test(s) && TEM_PERGUNTA.test(s))) && !DADO_DE_OFERTA.test(s);
+}
+
+/** A resposta do código: não sabe, e pede o preço (ou o que falta). */
+export function respostaLimite(l: Ligacao) {
+  if (l.oferta.preco_unitario === undefined) return "Isso eu não tenho aqui, mas me passa o melhor preço do senhor que eu levo pra ele.";
+  const falta = perguntaQueFalta(l);
+  return `Isso eu não tenho aqui. Eu levo a proposta do senhor pra ele.${falta ? ` ${falta}` : ""}`;
+}
+
+const FALA_DO_LIMITE = /\b(limite|teto|or[cç]amento|estipul|valor m[aá]ximo|pre[cç]o m[aá]ximo|m[aá]ximo que ele|quanto ele (paga|pode|tem)|pode cobrar|cobra[r]? o que|qualquer (pre[cç]o|valor))/i;
 
 // O Gemini às vezes degenera ("ốngốngống…"). Só passa texto com o alfabeto do português e sem repetição.
 const FORA_DO_PT = /[^a-zA-ZáàâãéêíóôõúüçÁÀÂÃÉÊÍÓÔÕÚÜÇ0-9\s.,!?;:…'"()%$ºª/-]/;
@@ -486,6 +519,7 @@ export function conferirFrase(l: Ligacao, frase: string, doCodigo = false): Vere
   const s = frase.toLowerCase();
   if (FORA_DO_PT.test(frase) || REPETICAO.test(s)) return { ok: false, motivo: "lixo" };
   if (!doCodigo && formasDoTeto(l).some((f) => s.includes(f))) return { ok: false, motivo: "teto" };
+  if (!doCodigo && FALA_DO_LIMITE.test(s)) return { ok: false, motivo: "limite" };
   if (FECHA_NEGOCIO.test(s)) return { ok: false, motivo: "fecha_negocio" };
   if (DESPEDIDA.test(s) && !podeEncerrar(l)) return { ok: false, motivo: "despedida_cedo" };
   return { ok: true };
