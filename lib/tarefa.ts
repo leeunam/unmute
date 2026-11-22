@@ -145,7 +145,7 @@ export function porExtenso(n: number): string {
   return resto ? `${cabeca} e ${porExtenso(resto)}` : cabeca;
 }
 
-function dataFalada(isoData: string): string {
+export function dataFalada(isoData: string): string {
   const d = new Date(`${isoData}T00:00:00Z`);
   const dia = DIAS[d.getUTCDay()];
   const nomeDia = d.getUTCDay() === 0 || d.getUTCDay() === 6 ? dia : `${dia}-feira`;

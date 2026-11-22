@@ -17,12 +17,132 @@ const LIMIAR_USUARIO = 0.08;
 const LIMIAR_AGENTE = 0.03;
 const SILENCIO_AGENTE_MS = 600;
 
+type Oferta = {
+  preco_unitario?: number;
+  preco_total?: number;
+  total_com_frete?: number;
+  frete?: string;
+  frete_valor?: number;
+  prazo_falado?: string;
+  prazo_entrega?: string;
+  pagamento?: string;
+  observacoes?: string;
+  faltando: string[];
+  completa: boolean;
+};
+type Ligacao = {
+  fornecedor: { id: string; nome: string; contato: string };
+  status: string;
+  pedido: { produto: string; quantidade: number; unidade: string; prazo_entrega: string };
+  meta_unitaria: number;
+  teto_total: number;
+  oferta: Oferta;
+  precos: number[];
+  indisponivel?: { motivo: string; retornar_em?: string };
+  resultado?: string;
+  encerrar_negado: number;
+  saidas_bloqueadas: number;
+  dentro_do_teto: boolean | null;
+  dentro_do_prazo: boolean | null;
+  conversa: { quem: string; texto: string }[];
+};
 type EstadoTarefa = {
   tarefa: Record<string, string | number | undefined>;
   faltando: string[];
   completa: boolean;
   conversa: { quem: string; texto: string }[];
+  ligacao: Ligacao | null;
 };
+const brl = (n?: number) => (n === undefined ? undefined : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
+const dataCurta = (iso?: string) =>
+  iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : undefined;
+const STATUS_LIGACAO: Record<string, string> = {
+  tocando: "tocando no celular do fornecedor",
+  em_andamento: "em ligação",
+  encerrada: "encerrada",
+  recusada: "recusada pelo fornecedor",
+};
+
+function CartaoLigacao({ l }: { l: Ligacao | null }) {
+  async function ligar(fornecedor: string) {
+    await fetch("/api/chamada", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ligar", fornecedor }) });
+  }
+  const o = l?.oferta;
+  const linhas: [string, string | undefined][] = o
+    ? [
+        ["Preço por unidade", o.preco_unitario !== undefined ? `${brl(o.preco_unitario)}${l!.precos.length > 1 ? ` (começou em ${brl(l!.precos[0])})` : ""}` : undefined],
+        ["Total (preço × quantidade)", brl(o.preco_total)],
+        ["Frete", o.frete ? `${o.frete}${o.frete_valor ? ` (${brl(o.frete_valor)})` : ""}` : undefined],
+        ["Entrega", o.prazo_entrega ? `${dataCurta(o.prazo_entrega)} ("${o.prazo_falado}")` : o.prazo_falado ? `vago: "${o.prazo_falado}"` : undefined],
+        ["Pagamento", o.pagamento],
+        ["Observações", o.observacoes],
+      ]
+    : [];
+  return (
+    <section>
+      <h2>Ligação para o fornecedor {l && <span className="ind on">{STATUS_LIGACAO[l.status] ?? l.status}</span>}</h2>
+      <div className="acoes">
+        <button className="secundario" onClick={() => ligar("a")} disabled={l?.status === "tocando" || l?.status === "em_andamento"}>
+          Ligar para o fornecedor A
+        </button>
+        <a href="/fornecedor/a" target="_blank" rel="noreferrer">Abrir o celular do fornecedor A</a>
+      </div>
+      {l && o && (
+        <>
+          <p className="nota">
+            {l.fornecedor.nome} · {l.pedido.quantidade.toLocaleString("pt-BR")} {l.pedido.unidade} de {l.pedido.produto} até {dataCurta(l.pedido.prazo_entrega)}.
+            O negociador recebeu só a meta de {brl(l.meta_unitaria)} por unidade, nunca o teto.
+          </p>
+          {l.indisponivel ? (
+            <p>
+              <strong>Fornecedor indisponível:</strong> {l.indisponivel.motivo}
+              {l.indisponivel.retornar_em ? ` (ligar de novo: ${l.indisponivel.retornar_em})` : ""}
+            </p>
+          ) : (
+            <>
+              <h2>
+                Oferta{" "}
+                {l.dentro_do_teto !== null && (
+                  <span className={`marca ${l.dentro_do_teto ? "ok" : "ruim"}`}>
+                    {l.dentro_do_teto ? "dentro do teto" : "acima do teto"} de {brl(l.teto_total)}
+                  </span>
+                )}{" "}
+                {l.dentro_do_prazo !== null && (
+                  <span className={`marca ${l.dentro_do_prazo ? "ok" : "ruim"}`}>{l.dentro_do_prazo ? "no prazo" : "fora do prazo"}</span>
+                )}
+              </h2>
+              <table>
+                <tbody>
+                  {linhas.map(([k, v]) => (
+                    <tr key={k}>
+                      <th>{k}</th>
+                      <td className={v === undefined ? "nota" : ""}>{v ?? (k === "Observações" ? "–" : "faltando")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {o.total_com_frete !== undefined && o.frete_valor ? <p>Total com frete: <strong>{brl(o.total_com_frete)}</strong></p> : null}
+            </>
+          )}
+          {(l.encerrar_negado > 0 || l.saidas_bloqueadas > 0) && (
+            <p className="nota">
+              O código segurou a ligação {l.encerrar_negado + l.saidas_bloqueadas}x porque a oferta ainda estava incompleta.
+            </p>
+          )}
+          {l.conversa.length > 0 && (
+            <div className="conversa">
+              {l.conversa.map((f, i) => (
+                <p key={i}>
+                  <strong>{f.quem === "fornecedor" ? "Fornecedor" : "Agente"}:</strong> {f.texto}
+                </p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 const CAMPOS: [string, string][] = [
   ["produto", "Produto"],
   ["quantidade", "Quantidade"],
@@ -307,6 +427,8 @@ export default function Home() {
           )}
         </section>
       )}
+
+      {tarefa && <CartaoLigacao l={tarefa.ligacao} />}
 
       <section>
         <h2>Latência no navegador</h2>

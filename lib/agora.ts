@@ -61,11 +61,15 @@ Se não entender o que a pessoa disse, peça para ela repetir.`;
 const GREETING = "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
 const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
 
-function llmConfig(origin: string) {
-  const provider = process.env.LLM_PROVIDER || "feita-proxy";
+/** Quem é o agente: o do produtor (padrão) ou o negociador que liga para o fornecedor. */
+export type Perfil = { rota: string; sistema: string; saudacao: string };
+const PRODUTOR: Perfil = { rota: "/api/llm/chat/completions", sistema: SYSTEM_PROMPT, saudacao: GREETING };
+
+function llmConfig(origin: string, perfil: Perfil) {
+  const provider = perfil === PRODUTOR ? process.env.LLM_PROVIDER || "feita-proxy" : "feita-proxy";
   const common = {
-    system_messages: [{ role: "system", content: SYSTEM_PROMPT }],
-    greeting_message: GREETING,
+    system_messages: [{ role: "system", content: perfil.sistema }],
+    greeting_message: perfil.saudacao,
     failure_message: FAILURE,
     max_history: 20,
     style: "openai",
@@ -84,7 +88,7 @@ function llmConfig(origin: string) {
     return {
       ...common,
       vendor: "custom",
-      url: `${publicUrl}/api/llm/chat/completions`,
+      url: `${publicUrl}${perfil.rota}`,
       api_key: env("LLM_PROXY_SECRET"),
     };
   }
@@ -161,7 +165,7 @@ function ttsConfig() {
   throw new Error(`TTS_VENDOR inválido: ${vendor}. Use "cartesia", "minimax" ou "feita".`);
 }
 
-export function joinBody(channel: string, origin: string) {
+export function joinBody(channel: string, origin: string, perfil: Perfil = PRODUTOR) {
   return {
     name: `desenrola-${channel}`,
     properties: {
@@ -173,7 +177,7 @@ export function joinBody(channel: string, origin: string) {
       idle_timeout: 60,
       // ASR_JSON troca o bloco asr inteiro (ex.: Deepgram gerenciado).
       asr: process.env.ASR_JSON ? JSON.parse(process.env.ASR_JSON) : ASR,
-      llm: llmConfig(origin),
+      llm: llmConfig(origin, perfil),
       tts: ttsConfig(),
       // Fim de fala semântico só existe para inglês e chinês; em pt-BR é VAD.
       // O padrão é 640 ms de silêncio; 300 ms ganha ~0,2 s sem cortar frases com pausa (TESTES.md).
@@ -210,8 +214,12 @@ async function agoraFetch(channel: string, path: string, init: { method: string;
   return data;
 }
 
-export async function startAgent(channel: string, origin: string): Promise<{ agent_id: string; status: string }> {
-  return (await agoraFetch(channel, "/join", { method: "POST", body: joinBody(channel, origin) })) as {
+export async function startAgent(
+  channel: string,
+  origin: string,
+  perfil?: Perfil,
+): Promise<{ agent_id: string; status: string }> {
+  return (await agoraFetch(channel, "/join", { method: "POST", body: joinBody(channel, origin, perfil) })) as {
     agent_id: string;
     status: string;
   };
