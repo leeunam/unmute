@@ -77,14 +77,14 @@ test("entrega no próprio dia do prazo vale", () => {
 test("sem oferta: indisponível e recusada são descartadas com o motivo", () => {
   const c = comparar(
     [
-      entrada("a", { faltando: ["preco_unitario"], completa: false }, { indisponivel: { motivo: "estava sem estoque" } }),
+      entrada("a", { faltando: ["preco_unitario"], completa: false }, { indisponivel: { motivo: "sem estoque" } }),
       entrada("b", { faltando: ["preco_unitario"], completa: false }, { status: "recusada" }),
     ],
     PRAZO,
     TETO,
   );
   assert.equal(c.recomendada, undefined);
-  assert.equal(fraseRecomendacao(c, HOJE), "O A estava sem estoque. O B não atendeu. Nenhum serviu. Quer que eu cancele a compra?");
+  assert.equal(fraseRecomendacao(c, HOJE), "O A não tem oferta: sem estoque. O B não atendeu. Nenhum serviu. Quer que eu cancele a compra?");
 });
 
 test("máquina de estados: A termina → B toca; B termina → ofertas coletadas → aprovação → fechada", () => {

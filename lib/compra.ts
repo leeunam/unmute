@@ -74,7 +74,12 @@ export function comparar(entradas: EntradaComparacao[], prazoPedido: string, tet
     const a: Avaliada = { id: e.id, nome: e.nome, total: o.total_com_frete, prazo: o.prazo_entrega, marcas: [] };
     if (e.indisponivel || !o.completa) {
       a.marcas.push("sem_oferta");
-      a.motivo = e.indisponivel?.motivo ?? (e.status === "recusada" ? "não atendeu" : "não passou a oferta completa");
+      // Vira frase: "O A não tem oferta: sem estoque." (o motivo vem do modelo, em qualquer forma).
+      a.motivo = e.indisponivel
+        ? `não tem oferta: ${e.indisponivel.motivo}`
+        : e.status === "recusada"
+          ? "não atendeu"
+          : "não passou a oferta completa";
       return a;
     }
     const motivos: string[] = [];
