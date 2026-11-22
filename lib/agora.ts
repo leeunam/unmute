@@ -58,7 +58,8 @@ Suas respostas viram áudio: use frases curtas, no máximo duas ou três por vez
 Não use listas, markdown, emojis nem símbolos. Escreva números e valores por extenso quando forem curtos.
 Se não entender o que a pessoa disse, peça para ela repetir.`;
 
-const GREETING = "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
+// SAUDACAO troca a saudação do produtor (scripts/amostras-vozes.sh grava a mesma fala em cada voz).
+const GREETING = process.env.SAUDACAO || "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
 const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
 
 /** Quem é o agente: o do produtor (padrão) ou o negociador que liga para o fornecedor. */
@@ -125,13 +126,14 @@ function ttsConfig() {
   const vendor = process.env.TTS_VENDOR || "cartesia";
   if (vendor === "cartesia") {
     // Cartesia sonic-3.6 gerenciado pela Agora (sem chave): tts_ttfb ~90–140 ms, o menor medido.
-    // Voz multilíngue "Jacqueline" falando pt. TESTES.md, seção 7.
+    // Voz "Alice", nativa pt-BR, escolhida de ouvido pelo dono entre 11 (TESTES.md, seção 17). Vale para o
+    // produtor e para o negociador. A anterior era a multilíngue "Jacqueline" (9626c31c-bec5-4cca-baa8-f8ba9e84c8bc).
     return {
       credential_mode: "managed",
       vendor: "cartesia",
       params: {
         model_id: "sonic-3.6",
-        voice: { mode: "id", id: process.env.TTS_VOICE || "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc" },
+        voice: { mode: "id", id: process.env.TTS_VOICE || "9904416a-0831-44ea-b8ee-5f145e8f9bbf" },
         output_format: { container: "raw", sample_rate: 24000 },
         language: "pt",
       },

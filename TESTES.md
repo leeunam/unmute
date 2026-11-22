@@ -11,7 +11,7 @@
 |---|---|---|
 | ASR | Deepgram `nova-3`, `pt-BR`, gerenciado pela Agora | Sem chave. `asr_ttlw` de 300 ms, contra ~370 ms do ARES com o mesmo VAD. |
 | LLM | `google/gemini-3.5-flash-lite` pelo gateway da feita.ai, via nossa rota com AI SDK, raciocínio mínimo | Desde a fase 2: acerta a tool `criar_tarefa` (seção 9). Na fase 1 era o Nemotron 3 Super, mais rápido mas erra a tool. |
-| TTS | Cartesia `sonic-3.6`, voz multilíngue "Jacqueline" falando `pt`, gerenciado pela Agora | Sem chave. `tts_ttfb` de ~90 ms, o menor medido. |
+| TTS | Cartesia `sonic-3.6`, voz "Alice" nativa pt-BR, falando `pt`, gerenciado pela Agora | Sem chave. `tts_ttfb` de ~90 ms, o menor medido. Até 22/11 era a multilíngue "Jacqueline" (seção 17). |
 | Fim de fala | VAD com 300 ms de silêncio | Ganha ~0,2 s em relação a 480 ms sem cortar frases com pausa. O semântico só existe para inglês e chinês. |
 
 ### Como medir
@@ -546,6 +546,44 @@ Agora, se a oferta já foi lida e o registro novo não muda nada, o código se d
 Nas rodadas finais, 11 perguntas do máximo foram respondidas pelo código, em 2–5 ms. O modelo não chegou a falar do
 limite, e 4 ligações terminaram pelo caminho novo do "Ok.". Os testes de regra cobrem as perguntas que o código
 responde, as falas com dado de oferta que vão para o modelo e as 6 formas de afirmação que o filtro corta.
+
+## Voz mais natural
+
+#### 17. A mesma fala em 11 vozes pela Agora (21/11/2026)
+
+`scripts/amostras-vozes.sh` sobe o app com cada voz, o agente fala só a saudação e o script grava a voz e lê o
+`tts_ttfb` do turno da saudação na API `turns`. Fala de teste: "Bom dia, aqui é o assistente de inteligência
+artificial do seu João. Tô ligando pra cotar dois mil e quinhentos litros de diesel S10, com entrega até quinta.
+Quanto que o senhor faz o litro?". Arquivos em `amostras/vozes-v2/`. Uma medida por voz.
+
+| Arquivo | Voz | Nativa pt-BR? | `tts_ttfb` (Agora) | TTFB isolado (curl) |
+|---|---|---|---|---|
+| `cartesia-jacqueline-atual.mp3` | Cartesia sonic-3.6, Jacqueline (padrão atual) | não, multilíngue | 96 ms | — |
+| `cartesia-felipe.mp3` | Cartesia sonic-3.6, Felipe (masc.) | sim | 91 ms | — |
+| `cartesia-rafael.mp3` | Cartesia sonic-3.6, Rafael (masc.) | sim | 94 ms | — |
+| `cartesia-fabiana.mp3` | Cartesia sonic-3.6, Fabiana (fem.) | sim | 146 ms | — |
+| `cartesia-larissa.mp3` | Cartesia sonic-3.6, Larissa (fem.) | sim | 95 ms | — |
+| `cartesia-alice.mp3` | Cartesia sonic-3.6, Alice (fem.) | sim | 96 ms | — |
+| `fish-adam.mp3` | Fish Audio s2.1-pro, "adam" (comunidade) | sim | 251 ms | — |
+| `minimax-friendly-neighbor.mp3` | MiniMax speech-2.8-turbo, `Portuguese_FriendlyNeighbor` | ? | 234 ms | — |
+| `microsoft-antonio.mp3` | feita: `microsoft/mai-voice-2.1-flash`, `pt-BR-AntonioNeural` | sim | 661 ms | 749 ms |
+| `elevenlabs-joao-pedro.mp3` | feita: `elevenlabs/eleven-flash-v2.5`, João Pedro (biblioteca) | sim | 997 ms | 887 ms |
+| `microsoft-francisca.mp3` | feita: `microsoft/mai-voice-2.1-flash`, `pt-BR-FranciscaNeural` | sim | 1110 ms | 605 ms |
+
+**Leitura:**
+- As 5 vozes nativas da Cartesia custam o mesmo que a Jacqueline (~90–150 ms). Trocar por uma delas não mexe na
+  latência. Os ids vieram de um catálogo de terceiros (creativeclaw.co), não da Cartesia: sem chave da Cartesia
+  não dá para listar. Todas geraram áudio com duração própria.
+- As vozes pela feita (`generic_http`) somam 0,5–1 s em **todo** turno. O e2e volta a passar de 2 s.
+- Fish e MiniMax ficam no meio (~240 ms).
+
+**Escolha do dono (22/11/2026): Cartesia Alice**, agora o padrão do produtor e do negociador. Rodada de confirmação
+pela Agora com o filler de 1000 ms (`audio-demo.sh`, perna do produtor e ligação A):
+- `tts_ttfb` 132–157 ms nos 13 turnos, igual à Jacqueline. e2e médio 1837 ms no produtor e 1801 ms na ligação A.
+- A ligação A saiu completa (R$ 7,10, quarta, frete do fornecedor, Pix) e o turno 3 terminou `interrupted`: a
+  interrupção continua funcionando com a voz nova.
+- A conversa do produtor com números falados ("dois mil litros", "quinta-feira, dia vinte e seis", "quinze mil
+  reais") está em `amostras/vozes-v2/cartesia-alice-produtor-conversa.mp3`, para conferir de ouvido.
 
 ### Gasto
 
