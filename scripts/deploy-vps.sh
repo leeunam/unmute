@@ -30,6 +30,8 @@ docker service create -q --name desenrola_app --network easypanel --replicas 1 \
   --dns 1.1.1.1 --dns 8.8.8.8 \
   --label criado-por=claude-fora-do-easypanel --label projeto=desenrola-agro \
   $TAG
+# A VPS está com o disco quase cheio: apaga as imagens antigas do desenrola.
+docker image ls desenrola --format '{{.Repository}}:{{.Tag}}' | grep -vx "$TAG" | xargs -r docker image rm >/dev/null || true
 REMOTO
 
 echo "4/4 rota no Traefik"
