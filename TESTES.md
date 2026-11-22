@@ -420,6 +420,100 @@ o cancelamento de eco (AEC) com som de verdade e o detector de 1,2 s de silênci
 - O fornecedor que diz "pode desligar" depois de dar o preço é tratado como recusa, então a ligação acaba sem a
   oferta completa.
 
+## Fase 4: A, depois B, comparar, recomendar e fechar
+
+**Pergunta:** o agente liga para os dois fornecedores em sequência, compara as ofertas sem LLM e volta ao produtor com
+a recomendação certa, até o "fecha"?
+
+**Como funciona:** veja `docs/TECNICO.md`, seção "A compra inteira". A comparação e a frase da recomendação são do
+código (`lib/compra.ts`). O LLM só aparece para entender o "fecha" (`aprovar_oferta`/`cancelar_tarefa`), e o código
+confere a decisão.
+
+#### 14. O fluxo inteiro em texto (21/11/2026)
+
+`scripts/fluxo-texto.mjs` faz o produtor, o A e o B com falas escritas e manda às rotas o mesmo histórico que a Agora
+mandaria. Caso da demo: 2.000 litros de combustível até quinta (26/11), teto R$ 15.000. A pergunta o máximo, começa em
+R$ 7,30 e baixa para R$ 7,10, entrega na quarta, frete dele, pix: **R$ 14.200 na quarta**. B faz R$ 6,50, não baixa,
+entrega na sexta, boleto: **R$ 13.000 na sexta**.
+
+| Rodada | Volta ao produtor | Resultado |
+|---|---|---|
+| 1 | "Fecha." | ok: FECHADA com A |
+| 2 | "Pode fechar." | ok: FECHADA com A |
+| 3 | "Fecha com o A." | ok: FECHADA com A |
+| 4 | "E o pagamento do A?" → "Fecha com o B então." → "Não, deixa eu pensar." → "Tá, fecha com o A." | **falhou**: cancelou no "deixa eu pensar" (item 1) |
+| 5 | o mesmo de 4 | **falhou**: "fecha com o B" fechou com **A** (item 2) |
+| 6 e 7 | o mesmo de 4, com as correções | ok nas duas: respondeu o pagamento (pix à vista), recusou B ("Com o B não dá: entrega depois do prazo. Fecho com o A?"), esperou no "deixa eu pensar" e fechou com A |
+
+Em todas as rodadas: "pode ligar" fez o celular de A tocar, o de B tocou sozinho quando A terminou, A saiu R$ 14.200 na
+quarta, B saiu R$ 13.000 na sexta, a recomendação foi A, B ficou "fora do prazo" e os estados foram
+`CRIADA → LIGANDO_A → LIGANDO_B → OFERTAS_COLETADAS → AGUARDANDO_APROVACAO → FECHADA`. A frase saiu igual em todas:
+"O A sai por catorze mil e duzentos reais, com entrega na quarta. O B é mais barato, mas só entrega na sexta. Fecho
+com o A?"
+
+Tempo até o primeiro texto na rota de aprovação: 0,48–0,84 s (1 chamada ao LLM; o código fala o resultado da tool).
+
+**O que os testes pegaram e o código passou a impedir:**
+1. **Cancelou sem pedido.** Com "Não, deixa eu pensar", o modelo chamou `cancelar_tarefa`. Agora o código só cancela
+   se a fala tem "cancela", "desisto", "deixa pra lá", "esquece", "não quero" ou "nenhum". Senão, responde "Tudo bem,
+   sem pressa. Quando decidir, é só falar fecha."
+2. **Fechou com o fornecedor errado.** Com "Fecha com o B então", o modelo chamou `aprovar_oferta("a")`, e a compra
+   fechou com A sem o produtor pedir. Agora, se o produtor diz qual fornecedor ("com o B", "o bê", "fornecedor A"), o
+   código usa o que ele disse, não o que o modelo mandou. B fora do prazo é recusado pelo código.
+3. **Aprovação explícita (regra 3).** `aprovar_oferta` só passa se a última fala do produtor tem uma palavra de
+   aprovação ("fecha", "pode", "sim", "isso"…). O botão **Aprovar** da tela é a reserva.
+
+**Regras do código sem LLM:** `npx --yes tsx --test scripts/compra.test.ts` passa 9/9: o caso da demo e a frase exata,
+o frete no total, acima do teto, entrega no dia do prazo, sem oferta (indisponível e recusada), a máquina de estados
+inteira com B recusado na aprovação, não aprovar antes das ofertas, A recusa a chamada → B toca, e o fornecedor dito
+pelo produtor. Os 12 testes da fase 3 continuam passando.
+
+#### 15. A demo inteira por voz pela Agora (21/11/2026)
+
+`scripts/demo-voz.sh` gera 4 WAVs na voz Luciana do macOS e abre 4 Chromes headless: o produtor, o A, o B e a volta
+ao produtor. Cada um atende quando a sua tela toca. Na ligação A, a 3ª fala entra ~3,5 s depois da 2ª, por cima do
+agente: é a interrupção. Configuração da fase 3: Deepgram nova-3, Gemini 3.5 Flash Lite pelas nossas rotas e túnel,
+Cartesia sonic-3.6, VAD 300 ms.
+
+**Resultado:** passou de ponta a ponta na 2ª tentativa (a 1ª falhou no script, item 1 abaixo).
+`CRIADA → LIGANDO_A → LIGANDO_B → OFERTAS_COLETADAS → AGUARDANDO_APROVACAO → FECHADA`, fechada com A por R$ 14.200.
+Nenhum agente ficou de pé.
+
+| Perna | O que aconteceu | Turnos de voz | e2e médio (Agora) | `llm_ttft` |
+|---|---|---|---|---|
+| Produtor | Pedido → "Quantos litros?" → "Dois mil" → confirmação → "Pode ligar" → "Beleza! Vou ligar pros fornecedores…". A sessão terminou sozinha depois da frase. | 3 | 1994 ms | 0,89–1,31 s |
+| Fornecedor A | Disse que é IA; desviou do "qual o máximo que ele paga?"; R$ 7,30 → tática de volume **interrompida** (`interrupted`) → R$ 7,10; quarta, frete dele, pix; leitura e despedida. | 6 | 2239 ms (p50 2006) | 1,10–2,59 s |
+| Fornecedor B | Tocou sozinho quando A terminou. R$ 6,50, não baixa, sexta, boleto 30 dias; leitura e despedida. | 5 | 1955 ms (p50 1924) | 1,01–1,13 s |
+| Volta ao produtor | Tela tocou, atendeu, o agente abriu com a frase do código; "Fecha." → "Pronto, compra fechada com o A, Distribuidora Boa Vista, por catorze mil e duzentos reais. Obrigado!" | 1 | 1703 ms | 0,81 s |
+
+**e2e médio dos 15 turnos de voz: 2059 ms.** A saudação de cada perna (a recomendação, na volta) sai em 90–155 ms,
+porque não passa pelo LLM.
+
+**Leitura:**
+- **O ASR errou e a oferta saiu certa.** "Entrego" virou "Emprego", "pix" virou "Picos", e a afirmação virou pergunta
+  ("ou o frete é por minha conta?"). A oferta de A saiu certa: R$ 7,10, quarta, frete R$ 0, pix à vista.
+- **Turno lento:** o turno com "Emprego… ou o frete é por minha conta?" levou 3,4 s (`llm_ttft` 2,6 s): duas
+  chamadas ao LLM no mesmo turno. É o pior turno da rodada.
+- **A URL com `?fornecedor=a` funciona:** a Agora manteve o parâmetro, e cada agente achou a sua ligação.
+
+**O que falhou e foi corrigido:**
+1. **1ª tentativa: o script derrubou o agente de A.** O `rodada.mjs` do produtor encerra, no fim, todos os agentes de
+   pé, e encerrou o de A, que tinha acabado de atender. Além disso, as pernas que esperam tocar passavam dos 180 s
+   do protocolo do puppeteer. Agora, as pernas não encerram agentes (quem confere é o `demo-voz.sh`, no fim) e o
+   tempo do protocolo acompanha a espera.
+
+**Achado da fase 3, ainda aberto:** numa rodada em texto, o negociador respondeu "Ele não estipulou limite" ao "qual o
+máximo que ele paga?". Não revela o teto, mas não é verdade. O prompt manda dizer só "ele pediu a melhor proposta".
+
+**A prova de voz foi sintética:** quem falou foram WAVs no microfone falso do Chrome. Falta o ensaio com 3 pessoas
+(produtor, A e B), que testa o eco e o detector de silêncio que encerra a sessão do produtor.
+
+**Limites desta fase:**
+- Dois fornecedores fixos, sempre na ordem A e depois B.
+- "Fechada com A" só marca a compra: o agente não liga de volta para o fornecedor.
+- Se o produtor não atender a volta, a compra fica em `OFERTAS_COLETADAS` e a tela continua tocando.
+- O código reconhece o fornecedor dito pelo produtor só por letra ("o A", "o B"), não pelo nome da distribuidora.
+
 ### Gasto
 
 Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
@@ -432,7 +526,10 @@ Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
 | Fim da fase 2 (seções 9 e 10) | 185 | 10.000 | ~20 (16 sessões) |
 | Fim da seção 11 | 183 | 10.000 | ~21 (17 sessões) |
 | Fim da fase 3 (seções 12 e 13) | 174 | 10.000 | ~24 (19 sessões) |
+| Fim da fase 4 (seções 14 e 15) | 168 | 10.000 | ~32 (25 sessões) |
 
+A fase 4 gastou 6 créditos com a chave 1 (`FEITA_API_KEY`): 7 rodadas do fluxo em texto (~0,8 crédito cada, ~18
+chamadas ao LLM) e 2 rodadas de voz (a 1ª parou na ligação A). Na Agora, ~8 min de agente em 6 sessões.
 A fase 3 gastou 9 créditos: ~200 chamadas ao LLM em texto (~0,04 crédito cada, com prompt e 3 tools) e 2 ligações
 de voz de ~1,5 min. Os testes de regra (`regras-negociador.test.ts`) não gastam crédito.
 A seção 11 gastou 2 créditos (~60 pedidos em texto e 1 sessão de voz de ~1 min). Antes dela, a fase 2 gastou 4 créditos: ~75 pedidos em texto, quase todos com duas chamadas por turno, e 2 sessões de voz.

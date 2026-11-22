@@ -5,13 +5,17 @@
 // O WAV sai de: SO_GERAR=1 ./scripts/audio-falso.sh
 // Ligação para o fornecedor: passe <url-do-túnel>/fornecedor/a e o WAV com as falas do fornecedor
 // (scripts/audio-fornecedor.sh). O script "liga" antes e a página atende sozinha.
+// ESPERAR=<s>: não liga; espera até <s> segundos a compra fazer tocar (fornecedor B, ou a volta ao
+// produtor) e então atende. Nesse modo não encerra os agentes no fim (as outras pernas da demo
+// ainda estão ligadas): quem confere é o scripts/demo-voz.sh. Usado por scripts/demo-voz.sh.
 import puppeteer from "puppeteer-core";
 
 import { writeFileSync } from "node:fs";
 const [url, wav, segundos = "75", saidaAudio] = process.argv.slice(2);
 const origem = new URL(url).origin;
 const fornecedor = url.match(/\/fornecedor\/(\w+)/)?.[1];
-if (fornecedor) {
+const esperar = Number(process.env.ESPERAR || 0);
+if (fornecedor && !esperar) {
   await fetch(`${origem}/api/chamada`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -21,6 +25,8 @@ if (fornecedor) {
 const browser = await puppeteer.launch({
   executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   headless: true,
+  // A espera pela página dura mais que os 180 s padrão do protocolo.
+  protocolTimeout: (Number(segundos) + 120 + esperar) * 1000,
   args: [
     "--use-fake-ui-for-media-stream",
     "--use-fake-device-for-media-stream",
@@ -38,10 +44,11 @@ try {
   });
   page.on("pageerror", (e) => console.log(`[pageerror] ${e.message}`));
   await page.goto(fornecedor ? `${url}?auto=${segundos}` : `${url}/?auto=${segundos}`, { waitUntil: "networkidle2" });
+  const t0 = Date.now();
   await page.waitForFunction(
     // .erro em vez de procurar "falta" no texto: o cartão do pedido mostra "faltando".
     () => (/Sessão encerrada/.test(document.body.innerText) || !!document.querySelector(".erro")) && !/Buscando/.test(document.body.innerText),
-    { timeout: (Number(segundos) + 60) * 1000, polling: 1000 },
+    { timeout: (Number(segundos) + 60 + esperar) * 1000, polling: 1000 },
   );
   if (saidaAudio) {
     const b64 = await page.evaluate(() => window.__gravacao ?? null);
@@ -50,10 +57,11 @@ try {
       console.log(`voz do agente gravada em ${saidaAudio}`);
     }
   }
-  console.log("----- página -----");
+  console.log(`----- página (${Math.round((Date.now() - t0) / 1000)} s) -----`);
   console.log(await page.evaluate(() => document.querySelector("main")?.innerText));
 } finally {
   await browser.close();
+  if (esperar || process.env.SEM_LIMPAR) process.exit(0);
   const res = await fetch(`${origem}/api/agentes`).then((r) => r.json());
   console.log("----- agentes de pé -----", JSON.stringify(res));
   if (res.agentes?.length) console.log(JSON.stringify(await fetch(`${origem}/api/agentes`, { method: "POST" }).then((r) => r.json())));
