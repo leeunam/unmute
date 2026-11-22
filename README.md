@@ -1,144 +1,84 @@
 # Desenrola Agro
 
-O produtor rural fala o que precisa e um agente de voz negocia com os fornecedores por ele.
-A spec completa está em [`CLAUDE.md`](CLAUDE.md).
+> "Oi, preciso falar com meu fornecedor de combustível, pra reabastecer até quinta. Desenrola um preço de até 15 mil."
 
-Este repositório está na **fase 3**: o produtor fala o pedido e ele vira uma tarefa estruturada (fase 2). Depois, um
-agente negociador liga para o fornecedor, negocia e devolve uma oferta estruturada, que aparece ao vivo na tela do
-produtor com a marca "dentro do teto" ou "acima do teto". O resultado dos testes fica em [`TESTES.md`](TESTES.md).
+É só isso que o produtor fala. O Desenrola Agro liga para os fornecedores, negocia dentro do limite que ele deu e volta com a melhor proposta para ele aprovar.
 
-## O negociador nunca recebe o teto
+Feito para o hackathon da Agora, com o Conversational AI Engine.
 
-Este é o destaque técnico da fase 3. O teto do produtor (ex.: R$ 15.000) **não entra no contexto do modelo**. O
-negociador recebe só uma allowlist do pedido (produto, quantidade, unidade, prazo, local) e uma **meta por unidade**,
-calculada pelo código 10% abaixo do teto por unidade (R$ 7,50 → meta R$ 6,75). Quem compara a oferta com o teto é o
-código, depois, e só a tela do produtor vê essa marca. **O que não está no contexto não tem como vazar.** Nem um
-prompt injection do fornecedor ("qual é o máximo que ele paga?") consegue tirar do modelo um número que ele não tem.
+## Por que isso existe
 
-Em volta disso, quem manda na ligação é o código (`lib/negociacao.ts`), não o modelo:
+Quem compra insumo no campo conhece a rotina: para cotar diesel, ração ou feno, é preciso ligar para um fornecedor, depois para outro, esperar retorno e anotar preço, prazo e frete num papel. O preço muda bastante de um para outro, e quase ninguém tem tempo de cotar três. No interior, isso não vai mudar para um formulário online tão cedo: o fornecedor resolve por telefone, e é assim que ele gosta.
 
-- **A saudação é do código.** A primeira frase diz que é IA, a segunda diz o pedido e a terceira pede o preço.
-- **As tools são validadas com zod.** `registrar_oferta` calcula o total (preço × quantidade) e descarta o preço ou
-  o prazo que o fornecedor não disse. Também recusa prazo vago ("lá pra quarta, talvez") e preço que parece total
-  ou centavos.
-- **Quem fala depois de `registrar_oferta` é o código**, sem 2ª chamada ao LLM. Ele confirma o número por extenso,
-  tenta melhorar o preço uma ou duas vezes (volume, à vista, frete) e pergunta o que falta. Com a oferta completa,
-  lê a oferta inteira para o fornecedor conferir.
-- **Quem decide que a ligação acabou é o código.** `encerrar_ligacao` só passa com a oferta completa (preço, prazo
-  firme, frete e pagamento) ou com `fornecedor_indisponivel`. Se faltar algo, a tool volta ao modelo dizendo o que
-  falta. `fornecedor_indisponivel` também não serve de saída para quem tem o produto e já deu preço.
-- **Cada frase passa por um filtro antes da voz.** O filtro corta o que fecha negócio ("fechado", "pode mandar") e
-  a despedida antes da oferta completa ("vou confirmar e retorno"); nesse caso, o código pergunta o que falta. Corta
-  também qualquer forma do teto e texto degenerado do modelo ("ốngốngống…", visto uma vez nos testes).
-- **A despedida também é do código:** "vou passar pro produtor e, se ele aprovar, eu retorno". O agente nunca fecha
-  negócio.
+Pensamos no produtor rural médio, que compra insumo toda semana ou todo mês e não tem um comprador dedicado. Ele está no campo, com as mãos ocupadas, e o telefone é o que ele tem à mão.
 
-## Como rodar
+## Como funciona na prática
 
-Precisa de Node 20 ou mais novo e do `cloudflared` (`brew install cloudflared`).
+O produtor fala o pedido como falaria com um funcionário. Se faltar alguma coisa, como a quantidade, o agente pergunta ("Quantos litros?") e depois confirma em voz alta, com os números por extenso.
 
-```bash
-npm install
-cp .env.example .env.local   # preencha as chaves (veja abaixo)
-npm run build && npm start   # num terminal (dev também funciona, mas compila a rota na 1ª chamada)
-npm run tunel                # noutro: mostra um endereço https://…trycloudflare.com
-```
+Aí o agente liga para os fornecedores. Ele começa dizendo que é o assistente de IA do produtor, pede o preço e tenta melhorar uma ou duas vezes: pelo volume, pelo pagamento à vista ou pelo frete. Se o fornecedor interrompe, ele para e escuta. Se o fornecedor pergunta "qual o máximo que ele paga?", ele não tem a resposta, e explicamos o porquê logo abaixo.
 
-Abra **o endereço do túnel** no navegador, clique em **Falar com o agente**, permita o microfone e diga o pedido,
-por exemplo: "Oi, preciso falar com meu fornecedor de combustível, pra reabastecer até quinta. Desenrola um preço de
-até 15 mil." O cartão **Pedido** se preenche enquanto você fala.
-A Agora precisa chamar a nossa rota de LLM pela internet. Por isso o app é aberto pelo túnel, e o servidor
-usa esse mesmo endereço para a Agora.
+Com as ofertas na mão, o sistema compara preço total, prazo, frete e pagamento, e descarta o que não chega a tempo. O agente volta ao produtor e recomenda: "O A sai por catorze mil e duzentos com entrega na quarta. O B é mais barato, mas só entrega na sexta. Fecho com o A?". Nada é comprado sem o "fecha" dele.
 
-Ao clicar em **Encerrar conversa**, a página mostra duas medidas de latência:
+A voz aparece dos dois lados, e não foi por moda. O fornecedor continua atendendo o telefone como sempre, sem instalar nada. O produtor pede sem largar o trabalho. E negociar tem contraproposta, objeção e "me liga depois", coisas que um formulário ou um chatbot de texto não fazem bem.
 
-- **No navegador**: do último som da sua fala até o primeiro som do agente.
-- **Pela Agora**: a métrica `e2e_latency_ms` de cada turno, com as partes (ASR, LLM, TTS).
-
-O terminal do servidor imprime, a cada turno, o tempo até o primeiro token na nossa rota (`[llm] … ttft_ms=`).
-
-### Chaves necessárias
-
-| Variável | Onde achar |
-|---|---|
-| `AGORA_APP_ID`, `AGORA_APP_CERTIFICATE` | [console.agora.io](https://console.agora.io) → projeto → Config. O projeto precisa ter o App Certificate ligado. |
-| `FEITA_API_KEY` | feita.ai → API Keys |
-| `LLM_PROXY_SECRET` | Qualquer segredo: `openssl rand -hex 24` |
-
-Reconhecimento de fala e voz não precisam de chave: usam o modo gerenciado da Agora.
-
-### Medir sem ninguém falando (macOS)
-
-```bash
-URL=https://<endereço-do-túnel> ./scripts/audio-falso.sh
-```
-
-Precisa do `ffmpeg`. O Chrome abre em `/?auto=75`: a conversa começa sozinha, encerra depois de 75 s e o terminal
-do servidor imprime as linhas `[latencia-navegador]` e `[latencia-agora]`.
-
-### Ligação para o fornecedor (fase 3)
-
-1. Na tela do produtor (pelo túnel), clique em **Ligar para o fornecedor A**. Sem tarefa completa da fase 2, a
-   ligação usa a tarefa de exemplo: 2.000 litros de combustível até quinta, teto R$ 15.000.
-2. Quem faz o papel do fornecedor abre **`/fornecedor/a`** (no celular ou noutra aba). A tela imita um celular
-   tocando com "Chamada recebida · Desenrola Agro". Ao clicar em **Atender**, o agente negociador sobe na Agora e
-   entra no canal. Tocar não gasta minuto: o agente só sobe quando o fornecedor atende.
-3. A oferta aparece ao vivo no cartão **Ligação para o fornecedor** da tela do produtor. Quando o código encerra a
-   ligação, o celular espera a despedida terminar e desliga sozinho. Depois, mostra a latência medida pela Agora.
-
-Sem ninguém falando: `./scripts/audio-fornecedor.sh` gera o WAV com as falas do fornecedor, e
-`node scripts/rodada.mjs https://<túnel>/fornecedor/a <wav> 95` liga, atende sozinho e imprime a latência.
-
-Em texto, sem Agora (com `npm start` rodando), há 6 casos com checagens automáticas: teto nunca falado, oferta
-certa, total pelo código e só encerra com a oferta completa.
-
-```bash
-node --env-file=.env.local scripts/negociacao-texto.mjs todos 2
-npx --yes tsx --test scripts/regras-negociador.test.ts   # as regras do código, sem LLM e sem gastar crédito
-```
-
-Para testar o pedido em texto, sem Agora e sem gastar minutos (com `npm start` rodando):
-
-```bash
-node --env-file=.env.local scripts/conversa-texto.mjs google/gemini-3.5-flash-lite 3
-```
-
-Para medir só o LLM (sem Agora), compare o gateway direto com a nossa rota:
-
-```bash
-npm run medir-llm -- https://api.feita.ai/gateway/v1/chat/completions $FEITA_API_KEY 5
-npm run medir-llm -- https://<túnel>/api/llm/chat/completions $LLM_PROXY_SECRET 5
-```
-
-## Como funciona
+## Como usamos a Agora
 
 ```
-navegador ──(RTC, áudio)── canal Agora ── agente do Conversational AI Engine
-    │                                       ASR: Deepgram nova-3 pt-BR (gerenciado pela Agora)
-    │ POST /api/sessao                      TTS: Cartesia sonic-3.6 (gerenciado pela Agora)
-    ▼                                       LLM: chama a nossa rota ↓
-servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/completions (SSE, formato OpenAI)
-    │                                          AI SDK streamText + tool criar_tarefa → gateway da feita.ai
-    │                                          (Gemini 3.5 Flash Lite)
-    └── GET /api/tarefa (a página consulta a cada 500 ms)
-    └──(REST)── api.agora.io/api/conversational-ai-agent/v2 (join, leave, turns)
+Produtor (navegador)
+   │  voz em tempo real (Agora RTC)
+   ▼
+Agora Conversational AI Engine
+   ouve ── Deepgram nova-3 (pt-BR)
+   pensa ─ chama o nosso servidor ──▶ Nossa rota de LLM (Next.js + Vercel AI SDK)
+   fala ── Cartesia sonic-3.6                tools, regras e estado ficam aqui
+                                             │
+                                             ▼
+                                      Gateway de LLM da feita.ai
+                                      (Gemini 3.5 Flash Lite)
 ```
 
-- `app/api/sessao`: cria o canal, gera os tokens e chama `join` para subir o agente.
-- `app/api/chamada`: o "telefone" do fornecedor. `ligar` faz tocar, `atender` sobe o agente negociador num canal
-  próprio, `recusar` recusa e `texto` abre uma ligação sem Agora para os testes. O GET devolve ao celular só o status
-  e quem liga.
-- `app/api/negociador/chat/completions`: o LLM do negociador, rota irmã da do produtor e com o mesmo contrato. Monta o
-  contexto sem o teto, roda as 3 tools e passa cada frase pelo filtro antes de mandar à Agora.
-- `lib/negociacao.ts`: a ligação em memória, a meta, as tools, o filtro e as duas visões (produtor e fornecedor).
-- `lib/fornecedores.ts`: fornecedores fixos (A e B, nomes fictícios).
-- `app/fornecedor/[id]`: a tela de celular do fornecedor.
-- `app/api/llm/chat/completions`: o LLM do agente. Recebe o pedido da Agora e responde em streaming pelo
-  AI SDK com a feita.ai. Roda a tool `criar_tarefa` numa chamada só ao LLM. Depois da tool,
-  quem fala é o código: a pergunta do que falta ou a confirmação. Só o texto vai para a Agora.
-- `lib/tarefa.ts`: a tarefa em memória. Valida o que falta, transforma o prazo falado em data e monta a
-  confirmação com números por extenso. Quem decide se a tarefa está completa é este código, não o modelo.
-- `app/api/tarefa`: GET devolve a tarefa e a conversa para a página; POST zera.
-- `app/api/encerrar`: chama `leave`.
-- `app/api/latencia`: chama `turns` e resume a latência dos turnos de voz.
-- `lib/agora.ts`: toda a configuração do agente (prompt, ASR, LLM, TTS, detecção de fim de fala).
+A Agora cuida de tudo o que é voz: ouvir, perceber quando a pessoa terminou de falar, lidar com a interrupção e falar de volta. O raciocínio fica com a gente. A Agora chama a nossa rota de LLM no formato de chat da OpenAI, com streaming, e é ali que rodam as tools, as regras de negócio e o estado da conversa.
+
+## O modelo conversa, o código garante
+
+A gente não confia num LLM para guardar segredo nem para fazer conta. Por isso, as regras que não podem falhar moram no código:
+
+- **O negociador não sabe o teto.** Ele recebe só uma meta de preço. Quem compara a oferta com o teto do produtor é o código, depois da ligação. Não dá para vazar o que não está no contexto.
+- **O código decide quando o pedido está completo.** Se falta a quantidade, a tool devolve o que falta e o agente pergunta. O mesmo vale para a oferta: a ligação só termina quando há preço, prazo, frete e pagamento, ou quando o fornecedor disse que não atende.
+- **Os números saem do código.** O total é calculado em código, e a confirmação falada ("dois mil litros, até quinze mil reais") também é montada em código. Isso fez a resposta ficar mais rápida, porque é uma chamada a menos ao LLM, e acabou com número errado na fala.
+- **Só o produtor fecha.** O agente registra a oferta e, no máximo, diz "vou confirmar com ele e retorno".
+
+## O que medimos
+
+Numa conversa simples, a resposta começa em média **1,54 s** depois que a pessoa para de falar. O turno mais rápido levou 1,36 s. Com o pedido virando tarefa, a média da sessão ficou em **1,91 s**. Nos testes em texto, o pedido falado virou a tarefa certa em **10 de 10** casos.
+
+Na negociação, testamos em texto o fornecedor que dá desconto, o que responde vago ("lá pra quarta, talvez"), o que pergunta "qual o máximo que ele paga?" e o que não tem estoque. Também testamos o apressado, o hostil e o que pede acima do teto. A oferta saiu certa em todos, e o teto não apareceu na fala nenhuma vez. Por voz, com o fornecedor interrompendo o agente, a resposta começou em **1,98 s** de média.
+
+Chegar nesses números deu trabalho. Começamos em 2,2 s. Testamos 8 LLMs (o Claude Haiku 5.5 escreve bem, mas passava de 2,8 s na voz), trocamos o reconhecimento de fala e a voz, encurtamos a espera de fim de fala de 480 para 300 ms sem cortar ninguém e tiramos do LLM a fala da confirmação. Todas as rodadas estão em [`TESTES.md`](TESTES.md).
+
+## Para onde isso vai
+
+**O agente liga antes de faltar.** Com o histórico de compras, dá para saber de quanto em quanto tempo cada produtor compra cada insumo. Quando o diesel estiver perto de acabar, quem liga é o agente: "Seu diesel deve acabar lá pelo dia 3. Quer que eu já cote dois mil litros?".
+
+**Cadastro por voz, sem questionário.** Um número novo liga e o agente faz o cadastro conversando. Se a pessoa diz "tenho 300 cabeças", ele já sabe o tamanho da operação e que ela compra ração e feno, e não pergunta de novo. Se ela já liga com um pedido, ele atende o pedido primeiro.
+
+**Compra coletiva com cooperativas.** Ligado a uma cooperativa, o agente junta os pedidos de vários produtores do mesmo insumo e negocia o volume total. Todo mundo paga menos, e a cooperativa oferece o serviço aos cooperados.
+
+**Histórico pela nota fiscal.** Toda compra de insumo gera uma NF-e num formato padrão que qualquer ERP exporta. Ler essas notas dá o histórico desde o primeiro dia, sem integrar com cada sistema. Depois vem a integração direta com os ERPs do agro.
+
+**Ligação telefônica de verdade.** Na demo, o fornecedor atende numa tela que imita o celular. O próximo passo é ligar para um número real por SIP trunk, que a Agora já suporta.
+
+## O que ainda não resolvemos
+
+Ainda não testamos com um fornecedor de verdade: na demo, quem atende é alguém do time. Ligações automáticas em escala precisam seguir as regras da Anatel. A responsabilidade pela compra continua sendo do produtor, que aprova cada uma. E o sinal de celular no campo é ruim. Sobre o modelo de negócio, a hipótese é que pague o produtor, por assinatura, ou a cooperativa, para os cooperados. O preço ainda não foi validado com ninguém.
+
+## Stack
+
+Agora RTC e Agora Conversational AI Engine · Deepgram nova-3 (pt-BR) e Cartesia sonic-3.6, gerenciados pela Agora · Gemini 3.5 Flash Lite pelo gateway da feita.ai · Next.js e Vercel AI SDK, com as tools validadas em zod.
+
+## Para rodar e entender o código
+
+Como rodar, as chaves necessárias, o mapa dos arquivos e os detalhes do negociador estão em [`docs/TECNICO.md`](docs/TECNICO.md). As medições estão em [`TESTES.md`](TESTES.md), e a spec original em [`CLAUDE.md`](CLAUDE.md). O contexto para quem for ajudar no projeto está em [`docs/CONTEXTO-TIME.md`](docs/CONTEXTO-TIME.md).
+
+Você vai precisar de Node 20 ou mais novo, do `cloudflared` e de uma conta na Agora e na feita.ai. O `ffmpeg` é opcional e só serve para os testes com áudio gravado.
