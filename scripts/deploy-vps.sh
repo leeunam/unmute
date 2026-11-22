@@ -2,7 +2,8 @@
 # Sobe o app na VPS do Davi (Easypanel com Traefik), fora do Easypanel, no mesmo padrão do social-credit:
 # imagem buildada na VPS a partir do commit atual (git archive), serviço Docker "desenrola_app" na rede
 # "easypanel" e uma rota no Traefik com HTTPS (Let's Encrypt) em https://desenrola.daviduarte.com.br.
-# As chaves saem do .env.local e ficam só em /root/desenrola/app.env na VPS (fora da imagem).
+# As chaves saem do .env.local e ficam só em /root/desenrola/app.env na VPS (fora da imagem). A FEITA_API_KEY da
+# VPS é a FEITA_API_KEY_DEMO, quando ela existe no .env.local.
 # Uso: ./scripts/deploy-vps.sh   (sobe o HEAD commitado; mudança não commitada não vai)
 # DNS público no serviço: com o DNS padrão do container, cada consulta à feita levava 4–11 s (o LLM ia de
 # ~0,9 s para ~5 s por turno). Com 1.1.1.1, ~0,2 s.
@@ -15,7 +16,13 @@ TAG="desenrola:$(git rev-parse --short HEAD)"
 remoto() { ssh -o ServerAliveInterval=60 -i "$HOME/.ssh/id_rsa" "$VPS" "$@"; }
 
 echo "1/4 chaves → /root/desenrola/app.env"
-{ grep -E '^[A-Z_]+=' .env.local | grep -v '^PUBLIC_URL='; echo "PUBLIC_URL=https://$DOMINIO"; } |
+# A VPS é a demo: se o .env.local tiver FEITA_API_KEY_DEMO, ela vira a FEITA_API_KEY do servidor.
+DEMO=$(grep -E '^FEITA_API_KEY_DEMO=' .env.local | head -1 | cut -d= -f2- || true)
+{
+  grep -E '^[A-Z_]+=' .env.local | grep -v '^PUBLIC_URL=' | { [ -n "$DEMO" ] && grep -v '^FEITA_API_KEY=' || cat; }
+  [ -n "$DEMO" ] && echo "FEITA_API_KEY=$DEMO"
+  echo "PUBLIC_URL=https://$DOMINIO"
+} |
   remoto 'mkdir -p /root/desenrola && umask 077 && cat > /root/desenrola/app.env'
 
 echo "2/4 build da imagem $TAG na VPS"
