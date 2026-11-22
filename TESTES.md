@@ -11,7 +11,7 @@
 |---|---|---|
 | ASR | Deepgram `nova-3`, `pt-BR`, gerenciado pela Agora | Sem chave. `asr_ttlw` de 300 ms, contra ~370 ms do ARES com o mesmo VAD. |
 | LLM | `google/gemini-3.5-flash-lite` pelo gateway da feita.ai, via nossa rota com AI SDK, raciocínio mínimo | Desde a fase 2: acerta a tool `criar_tarefa` (seção 9). Na fase 1 era o Nemotron 3 Super, mais rápido mas erra a tool. |
-| TTS | Cartesia `sonic-3.6`, voz multilíngue "Jacqueline" falando `pt`, gerenciado pela Agora | Sem chave. `tts_ttfb` de ~90 ms, o menor medido. |
+| TTS | Cartesia `sonic-3.6`, voz "Alice" nativa pt-BR, falando `pt`, gerenciado pela Agora | Sem chave. `tts_ttfb` de ~90 ms, o menor medido. Até 22/11 era a multilíngue "Jacqueline" (seção 17). |
 | Fim de fala | VAD com 300 ms de silêncio | Ganha ~0,2 s em relação a 480 ms sem cortar frases com pausa. O semântico só existe para inglês e chinês. |
 
 ### Como medir
@@ -576,6 +576,14 @@ Quanto que o senhor faz o litro?". Arquivos em `amostras/vozes-v2/`. Uma medida 
   não dá para listar. Todas geraram áudio com duração própria.
 - As vozes pela feita (`generic_http`) somam 0,5–1 s em **todo** turno. O e2e volta a passar de 2 s.
 - Fish e MiniMax ficam no meio (~240 ms).
+
+**Escolha do dono (22/11/2026): Cartesia Alice**, agora o padrão do produtor e do negociador. Rodada de confirmação
+pela Agora com o filler de 1000 ms (`audio-demo.sh`, perna do produtor e ligação A):
+- `tts_ttfb` 132–157 ms nos 13 turnos, igual à Jacqueline. e2e médio 1837 ms no produtor e 1801 ms na ligação A.
+- A ligação A saiu completa (R$ 7,10, quarta, frete do fornecedor, Pix) e o turno 3 terminou `interrupted`: a
+  interrupção continua funcionando com a voz nova.
+- A conversa do produtor com números falados ("dois mil litros", "quinta-feira, dia vinte e seis", "quinze mil
+  reais") está em `amostras/vozes-v2/cartesia-alice-produtor-conversa.mp3`, para conferir de ouvido.
 
 ### Gasto
 
