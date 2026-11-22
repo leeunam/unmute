@@ -1,0 +1,185 @@
+<title>Desenrola Agro, ganho custo preço</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: proposta de 3 slides no visual do deck (grade clara, borda laranja, blocos pretos), com notas de fala abaixo de cada um */
+:root{
+  --bg:#efefef; --grid:#e4e4e4; --ink:#0a0a0a; --mute:#555; --line:#d8a24a;
+  --orange:#e8a23a; --cream:#f5e6cc; --panel:#f3f3f3; --black:#0a0a0a; --onblack:#ffffff;
+  --green:#3f8f3a;
+  --sans: Arial, "Liberation Sans", Helvetica, sans-serif;
+  color-scheme: light;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:40px 40px}
+.wrap{max-width:1100px;margin:0 auto;padding-block:40px 64px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:flex;flex-direction:column;gap:40px}
+h1{font-size:clamp(28px,4vw,44px);margin:0;text-wrap:balance}
+h2{font-size:22px;margin:0 0 4px;text-wrap:balance}
+p{line-height:1.5;max-width:68ch;margin:0}
+.lead{color:var(--mute);font-size:17px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--orange)}
+
+/* escada de evidências */
+.ladder{display:grid;gap:10px}
+.rung{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:16px;align-items:center;background:var(--panel);
+  border:1px solid var(--line);border-radius:12px;padding:14px 18px}
+.rung b{display:block;font-size:16px}
+.rung span{color:var(--mute);font-size:14px;line-height:1.4}
+.rung .v{font-size:24px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.rung.old{opacity:.6}
+.rung.old .v{text-decoration:line-through}
+.rung.pick{background:var(--black);color:var(--onblack);border-color:var(--black)}
+.rung.pick span{color:#cfcfcf}
+.rung.pick .v{color:var(--orange)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--orange);color:var(--black);border-radius:4px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+
+/* slides */
+.slide{container-type:inline-size;aspect-ratio:16/9;max-width:100%;background:var(--bg);border:1px solid #cfcfcf;
+  border-radius:6px;overflow:hidden;position:relative;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:3.2cqw 3.2cqw}
+.s{position:absolute;inset:0;padding:3.4cqw 5.4cqw;display:flex;flex-direction:column;gap:2.2cqw}
+.s-title{align-self:center;border:.12cqw solid var(--orange);border-radius:1.2cqw;padding:.5cqw 4cqw;
+  font-size:3.6cqw;font-weight:800;letter-spacing:.02em}
+.box{border:.1cqw solid var(--orange);border-radius:1.2cqw;background:var(--panel);padding:1.8cqw 2.2cqw}
+.dark{background:var(--black);color:var(--onblack);border-radius:1.2cqw;padding:1.8cqw 2.2cqw}
+.lbl{font-size:1.3cqw;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.dark .lbl{color:var(--orange)}
+.big{font-size:8cqw;font-weight:800;line-height:1}
+.mid{font-size:3.2cqw;font-weight:800;line-height:1.05}
+.t{font-size:1.6cqw;line-height:1.35}
+.t.m{color:var(--mute)}
+.dark .t.m{color:#bdbdbd}
+.row{display:grid;gap:2cqw}
+.r3{grid-template-columns:repeat(3,1fr)}
+.foot{font-size:1.15cqw;color:var(--mute);margin-top:auto}
+
+/* barras em escala */
+.bars{display:grid;gap:1.2cqw}
+.bar{display:grid;grid-template-columns:16cqw 1fr;align-items:center;gap:1.4cqw}
+.bar .k{font-size:1.5cqw;font-weight:700;text-align:right}
+.bar .fill{height:4.2cqw;border-radius:.6cqw;display:flex;align-items:center;padding-left:1.2cqw;
+  font-size:2.2cqw;font-weight:800;white-space:nowrap}
+.f-gain{background:var(--green);color:#fff}
+.f-price{background:var(--orange);color:var(--black)}
+.f-cost{background:var(--black);color:#fff}
+.stack{display:flex;height:5cqw;border-radius:.6cqw;overflow:hidden}
+.stack div{display:flex;align-items:center;justify-content:center;font-size:1.25cqw;font-weight:700;color:#fff;
+  border-right:.15cqw solid var(--bg);text-align:center;line-height:1.1}
+.legend{display:grid;grid-template-columns:repeat(4,1fr);gap:.6cqw 2cqw;font-size:1.3cqw}
+.legend i{display:inline-block;width:1.1cqw;height:1.1cqw;border-radius:.2cqw;margin-right:.5cqw;vertical-align:-.1cqw}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr)}
+.kpis>div{padding-right:1.6cqw;border-right:.1cqw solid #555}
+.kpis>div+div{padding-left:1.6cqw}
+.kpis>div:last-child{border-right:0}
+
+/* notas */
+.slot{display:grid;gap:14px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.note{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:15px;line-height:1.5}
+.note b{display:block;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);margin-bottom:4px}
+.qa{display:grid;gap:10px}
+.qa div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:15px;line-height:1.5}
+.qa q{font-weight:700;quotes:"“" "”"}
+@media (max-width:560px){.rung{grid-template-columns:1fr}.rung .v{text-align:left}}
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:10px">
+    <div class="eyebrow">Proposta para os slides de modelo de negócio</div>
+    <h1>O cooperado ganha R$ 550, nós custamos R$ 70 e cobramos R$ 100</h1>
+    <p class="lead">Dois slides: primeiro o ganho do cooperado, depois o preço com o custo dentro dele. Quando o R$ 100 aparece, já parece barato.</p>
+  </header>
+
+  <section style="display:grid;gap:14px">
+    <h2>Por que dá para subir os R$ 200</h2>
+    <p>Os R$ 200 usavam R$ 0,10 por litro, um número sem fonte. Os nossos próprios dados da ANP sustentam quase o triplo, usando a comparação mais conservadora que temos.</p>
+    <div class="ladder">
+      <div class="rung old"><div><b>Premissa antiga</b><span>2.000 L × R$ 0,10/L. Sem fonte.</span></div><div class="v">R$ 200</div></div>
+      <div class="rung pick"><div><b>Mediana do Brasil, ANP <span class="tag">usar no slide</span></b><span>2.000 L × R$ 0,275/L. É a diferença entre o preço médio e o mais barato da mesma cidade, mediana de 316 municípios (LPC, 08 a 14/11/2026).</span></div><div class="v">R$ 550</div></div>
+      <div class="rung"><div><b>Sorriso/MT, cidade do agro</b><span>Do posto mais caro ao mais barato: R$ 1,00/L em 2.000 L. Serve como teto e como exemplo concreto.</span></div><div class="v">R$ 2.000</div></div>
+      <div class="rung"><div><b>Quem também compra farelo</b><span>Carga de 30 t a R$ 2.000/t, economia de 8 a 12% contra a média das ofertas (anúncios com 16 a 24% de diferença).</span></div><div class="v">+R$ 4.800</div></div>
+    </div>
+    <p>Extrapolando com uma compra de diesel por mês: <b>R$ 6.600 por ano por cooperado</b>. Uma cooperativa com 100 cooperados ativos economiza <b>R$ 660 mil por ano</b> e paga R$ 120 mil.</p>
+  </section>
+
+  <!-- SLIDE 1 -->
+  <section class="slot">
+    <div class="eyebrow">Slide 1 · Além do tempo, dinheiro</div>
+    <div class="slide"><div class="s" style="gap:0">
+      <div class="s-title">ALÉM DO TEMPO, DINHEIRO</div>
+      <div style="flex:1;display:grid;grid-template-columns:1fr 1.7fr;align-items:center;gap:4cqw">
+        <div style="display:grid;gap:2.4cqw">
+          <div style="display:grid;gap:.6cqw">
+            <div style="font-size:6.4cqw;font-weight:800;line-height:1">14%</div>
+            <div class="t">diferença do diesel entre postos da mesma cidade</div>
+          </div>
+          <div style="height:.12cqw;background:var(--orange)"></div>
+          <div style="display:grid;gap:.6cqw">
+            <div style="font-size:6.4cqw;font-weight:800;line-height:1">4%</div>
+            <div class="t">abaixo do preço médio, negociando com vários fornecedores</div>
+          </div>
+        </div>
+        <div style="display:grid;gap:1.4cqw;border-left:.12cqw solid #bbb;padding-left:4cqw">
+          <div class="lbl" style="color:#b5762a;font-size:1.7cqw">Possibilidade de economia mensal</div>
+          <div style="font-size:15cqw;font-weight:800;line-height:.9;white-space:nowrap;letter-spacing:-.02em">R$ 550</div>
+          <div class="mid" style="font-size:2.6cqw">por cooperado, só no diesel</div>
+          <div class="t m" style="font-size:1.9cqw">R$ 6.600 por ano · compra de 2.000 L por mês</div>
+        </div>
+      </div>
+      <div class="foot" style="margin-top:0">Fonte: ANP, preços de 08 a 14/11/2026. 14%: Sorriso/MT. 4%: mediana de 316 municípios.</div>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b>Fala</b>“Além de economizar tempo, o cooperado ganha dinheiro. Em Sorriso, o mesmo diesel varia 14% entre postos. Negociando, ele paga pelo menos 4% abaixo da média. Numa compra de 2.000 litros, isso dá R$ 550 por mês.”</div>
+    </div>
+  </section>
+
+  <!-- SLIDE 2 -->
+  <section class="slot">
+    <div class="eyebrow">Slide 2 · Custo, preço e KPIs</div>
+    <div class="slide"><div class="s" style="gap:0">
+      <div class="s-title">MODELO DE NEGÓCIOS</div>
+      <div style="flex:1;display:grid;grid-template-columns:1.5fr 1fr;align-items:center;gap:4cqw">
+        <div style="display:grid;gap:1.2cqw">
+          <div class="lbl" style="color:#b5762a;font-size:1.7cqw">Preço por produtor ativo</div>
+          <div style="display:flex;align-items:baseline;gap:1.2cqw;white-space:nowrap">
+            <span style="font-size:12cqw;font-weight:800;line-height:.9;letter-spacing:-.02em">R$ 100</span>
+            <span class="mid" style="font-size:3cqw">/mês</span>
+          </div>
+          <div class="t m" style="font-size:1.9cqw">A cooperativa paga. O cooperado economiza R$ 550.</div>
+        </div>
+        <div style="border-left:.12cqw solid #bbb;padding-left:3.4cqw;display:grid;gap:1.6cqw">
+          <div class="lbl" style="color:#b5762a">KPIs do piloto</div>
+          <div><div style="font-size:3.4cqw;font-weight:800;line-height:1">5×</div><div class="t">economia por real pago</div></div>
+          <div style="height:.1cqw;background:#ccc"></div>
+          <div><div style="font-size:3.4cqw;font-weight:800;line-height:1">Recorrência</div><div class="t">% que cota de novo no mês seguinte</div></div>
+          <div style="height:.1cqw;background:#ccc"></div>
+          <div><div style="font-size:3.4cqw;font-weight:800;line-height:1">≤ R$ 70</div><div class="t">custo por produtor ativo</div></div>
+        </div>
+      </div>
+      <div style="display:grid;gap:1cqw;padding-bottom:1cqw">
+        <div style="display:flex;font-size:1.4cqw;font-weight:700;letter-spacing:.04em;text-transform:uppercase">
+          <div style="flex:70;border-bottom:.15cqw solid #0a0a0a;padding-bottom:.4cqw;margin-right:.6cqw">Nosso custo · R$ 70</div>
+          <div style="flex:30;border-bottom:.15cqw solid var(--orange);padding-bottom:.4cqw;color:#b5762a">Margem · R$ 30</div>
+        </div>
+        <div style="display:flex;gap:.3cqw;height:2.6cqw;border-radius:.5cqw;overflow:hidden"><div style="flex:30;background:#0a0a0a"></div><div style="flex:15;background:#3d3d3d"></div><div style="flex:8;background:#6b6b6b"></div><div style="flex:17;background:#9a9a9a"></div><div style="flex:30;background:var(--orange)"></div></div>
+        <div style="display:flex"><div style="flex:30;min-width:0;padding-right:.8cqw"><div style="font-size:2.2cqw;font-weight:800">R$ 30</div><div class="t" style="font-size:1.3cqw;line-height:1.25">Operação e suporte</div></div><div style="flex:15;min-width:0;padding-right:.8cqw"><div style="font-size:2.2cqw;font-weight:800">R$ 15</div><div class="t" style="font-size:1.3cqw;line-height:1.25">Voz e APIs</div></div><div style="flex:8;min-width:0;padding-right:.8cqw"><div style="font-size:2.2cqw;font-weight:800">R$ 8</div><div class="t" style="font-size:1.3cqw;line-height:1.25">Tributos</div></div><div style="flex:17;min-width:0;padding-right:.8cqw"><div style="font-size:2.2cqw;font-weight:800">R$ 17</div><div class="t" style="font-size:1.3cqw;line-height:1.25">Comercial, admin e hospedagem</div></div><div style="flex:30;min-width:0;padding-right:.8cqw"><div style="font-size:2.2cqw;font-weight:800;color:#b5762a">R$ 30</div><div class="t" style="font-size:1.3cqw;line-height:1.25">Margem</div></div></div>
+      </div>
+    </div></div>
+    <div class="notes">
+      <div class="note"><b>Fala</b>“Cobramos R$ 100 da cooperativa. Entregar custa R$ 70, e a IA em si é só R$ 15 disso. O cooperado ganha R$ 550.”</div>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:14px">
+    <h2>Se a banca perguntar</h2>
+    <div class="qa">
+      <div><q>Esse preço é de posto. O produtor compra a granel.</q> É verdade. A ANP mede a bomba, não a entrega na fazenda. O dado prova que o mesmo produto varia muito na mesma cidade. Medir isso no granel é o primeiro KPI do piloto.</div>
+      <div><q>R$ 550 não é otimista?</q> É a mediana, e compara com o preço médio, não com o mais caro. Contra o mais caro, a mediana do Brasil daria R$ 1.290.</div>
+      <div><q>E se o cooperado não comprar diesel todo mês?</q> Com uma compra a cada dois meses, o ganho fica em R$ 275 por mês, ainda 2,75 vezes o preço.</div>
+    </div>
+  </section>
+</div>
