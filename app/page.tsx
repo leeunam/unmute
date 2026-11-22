@@ -8,6 +8,7 @@ import { ChamadaHero } from "@/components/produtor/chamada-hero";
 import { ConversaAoVivo } from "@/components/produtor/conversa-ao-vivo";
 import { CartaoPedido } from "@/components/produtor/cartao-pedido";
 import { CartaoLatencia } from "@/components/produtor/cartao-latencia";
+import { CartaoCompra, type Compra } from "@/components/produtor/cartao-compra";
 
 type Sessao = { appId: string; channel: string; uid: number; token: string; agentId: string };
 type Turnos = {
@@ -22,132 +23,15 @@ const LIMIAR_USUARIO = 0.08;
 const LIMIAR_AGENTE = 0.03;
 const SILENCIO_AGENTE_MS = 600;
 
-type Oferta = {
-  preco_unitario?: number;
-  preco_total?: number;
-  total_com_frete?: number;
-  frete?: string;
-  frete_valor?: number;
-  prazo_falado?: string;
-  prazo_entrega?: string;
-  pagamento?: string;
-  observacoes?: string;
-  faltando: string[];
-  completa: boolean;
-};
-type Ligacao = {
-  fornecedor: { id: string; nome: string; contato: string };
-  status: string;
-  pedido: { produto: string; quantidade: number; unidade: string; prazo_entrega: string };
-  meta_unitaria: number;
-  teto_total: number;
-  oferta: Oferta;
-  precos: number[];
-  indisponivel?: { motivo: string; retornar_em?: string };
-  resultado?: string;
-  encerrar_negado: number;
-  saidas_bloqueadas: number;
-  dentro_do_teto: boolean | null;
-  dentro_do_prazo: boolean | null;
-  conversa: { quem: string; texto: string }[];
-};
 type EstadoTarefa = {
   tarefa: Record<string, string | number | undefined>;
   faltando: string[];
   completa: boolean;
   conversa: { quem: string; texto: string }[];
-  ligacao: Ligacao | null;
+  compra: Compra;
 };
-const brl = (n?: number) => (n === undefined ? undefined : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }));
-const dataCurta = (iso?: string) =>
-  iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }) : undefined;
-const STATUS_LIGACAO: Record<string, string> = {
-  tocando: "tocando no celular do fornecedor",
-  em_andamento: "em ligação",
-  encerrada: "encerrada",
-  recusada: "recusada pelo fornecedor",
-};
-
-function CartaoLigacao({ l }: { l: Ligacao | null }) {
-  async function ligar(fornecedor: string) {
-    await fetch("/api/chamada", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: "ligar", fornecedor }) });
-  }
-  const o = l?.oferta;
-  const linhas: [string, string | undefined][] = o
-    ? [
-        ["Preço por unidade", o.preco_unitario !== undefined ? `${brl(o.preco_unitario)}${l!.precos.length > 1 ? ` (começou em ${brl(l!.precos[0])})` : ""}` : undefined],
-        ["Total (preço × quantidade)", brl(o.preco_total)],
-        ["Frete", o.frete ? `${o.frete}${o.frete_valor ? ` (${brl(o.frete_valor)})` : ""}` : undefined],
-        ["Entrega", o.prazo_entrega ? `${dataCurta(o.prazo_entrega)} ("${o.prazo_falado}")` : o.prazo_falado ? `vago: "${o.prazo_falado}"` : undefined],
-        ["Pagamento", o.pagamento],
-        ["Observações", o.observacoes],
-      ]
-    : [];
-  return (
-    <section>
-      <h2>Ligação para o fornecedor {l && <span className="ind on">{STATUS_LIGACAO[l.status] ?? l.status}</span>}</h2>
-      <div className="acoes">
-        <button className="secundario" onClick={() => ligar("a")} disabled={l?.status === "tocando" || l?.status === "em_andamento"}>
-          Ligar para o fornecedor A
-        </button>
-        <a href="/fornecedor/a" target="_blank" rel="noreferrer">Abrir o celular do fornecedor A</a>
-      </div>
-      {l && o && (
-        <>
-          <p className="nota">
-            {l.fornecedor.nome} · {l.pedido.quantidade.toLocaleString("pt-BR")} {l.pedido.unidade} de {l.pedido.produto} até {dataCurta(l.pedido.prazo_entrega)}.
-            O negociador recebeu só a meta de {brl(l.meta_unitaria)} por unidade, nunca o teto.
-          </p>
-          {l.indisponivel ? (
-            <p>
-              <strong>Fornecedor indisponível:</strong> {l.indisponivel.motivo}
-              {l.indisponivel.retornar_em ? ` (ligar de novo: ${l.indisponivel.retornar_em})` : ""}
-            </p>
-          ) : (
-            <>
-              <h2>
-                Oferta{" "}
-                {l.dentro_do_teto !== null && (
-                  <span className={`marca ${l.dentro_do_teto ? "ok" : "ruim"}`}>
-                    {l.dentro_do_teto ? "dentro do teto" : "acima do teto"} de {brl(l.teto_total)}
-                  </span>
-                )}{" "}
-                {l.dentro_do_prazo !== null && (
-                  <span className={`marca ${l.dentro_do_prazo ? "ok" : "ruim"}`}>{l.dentro_do_prazo ? "no prazo" : "fora do prazo"}</span>
-                )}
-              </h2>
-              <table>
-                <tbody>
-                  {linhas.map(([k, v]) => (
-                    <tr key={k}>
-                      <th>{k}</th>
-                      <td className={v === undefined ? "nota" : ""}>{v ?? (k === "Observações" ? "–" : "faltando")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {o.total_com_frete !== undefined && o.frete_valor ? <p>Total com frete: <strong>{brl(o.total_com_frete)}</strong></p> : null}
-            </>
-          )}
-          {(l.encerrar_negado > 0 || l.saidas_bloqueadas > 0) && (
-            <p className="nota">
-              O código segurou a ligação {l.encerrar_negado + l.saidas_bloqueadas}x porque a oferta ainda estava incompleta.
-            </p>
-          )}
-          {l.conversa.length > 0 && (
-            <div className="conversa">
-              {l.conversa.map((f, i) => (
-                <p key={i}>
-                  <strong>{f.quem === "fornecedor" ? "Fornecedor" : "Agente"}:</strong> {f.texto}
-                </p>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
+const postar = (url: string, body: unknown) =>
+  fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const CAMPOS: [string, string][] = [
   ["produto", "Produto"],
   ["quantidade", "Quantidade"],
@@ -232,6 +116,7 @@ export default function Home() {
           }
         }
         agenteQuietoDesde = agora;
+        ultimoSomAgente.current = agora;
       } else if (agenteAtivo && agora - agenteQuietoDesde > SILENCIO_AGENTE_MS) {
         agenteAtivo = false;
         setAgenteFalando(false);
@@ -261,14 +146,21 @@ export default function Home() {
     gravador.current = rec;
   }
 
-  async function iniciar() {
+  const ultimoSomAgente = useRef(0);
+
+  // retorno: o produtor atende a ligação de volta com as ofertas (o agente abre com a recomendação).
+  async function iniciar(retorno = false) {
     setErro("");
     setTurnos(null);
     setLatencias([]);
     setEstado("conectando");
     try {
       setStatus("Subindo o agente na Agora…");
-      const res = await fetch("/api/sessao", { method: "POST" });
+      const res = await fetch("/api/sessao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retorno }),
+      });
       const dados = await res.json();
       if (!res.ok) throw new Error(dados.erro ?? `Falha ao iniciar (${res.status})`);
       sessao.current = dados as Sessao;
@@ -320,11 +212,13 @@ export default function Home() {
   }
 
   async function encerrar() {
+    // Pode ser chamado duas vezes (fim automático e ?auto=N): só a 1ª encerra.
+    const s = sessao.current;
+    if (!s) return;
+    sessao.current = null;
     setEstado("encerrando");
     setStatus("Encerrando…");
     await desligarLocal();
-    const s = sessao.current;
-    if (!s) return setEstado("parado");
     try {
       await fetch("/api/encerrar", {
         method: "POST",
@@ -356,8 +250,16 @@ export default function Home() {
     }
   }
 
-  // Modo automático para medir sem ninguém clicar: /?auto=70 começa sozinho
-  // e encerra depois de 70 s (usado por scripts/audio-falso.sh).
+  const resumoNavegador = resumir(latencias);
+  const tarefa = useTarefa();
+  const estadoCompra = tarefa?.compra.estado;
+  const tocando = estadoCompra === "OFERTAS_COLETADAS" && estado === "parado";
+  // Durante as ligações, a conversa mostrada é a do fornecedor da vez.
+  const ligacaoAtual = tarefa?.compra.ligacoes.findLast((l) => l.status === "em_andamento" || (l.status === "encerrada" && /^LIGANDO/.test(estadoCompra ?? "")));
+
+  // Modo automático para medir sem ninguém clicar: /?auto=70 começa sozinho e encerra depois de
+  // 70 s (scripts/rodada.mjs). Se a compra está ligando para os fornecedores, espera a ligação de
+  // volta tocar e atende.
   const iniciarRef = useRef(iniciar);
   const encerrarRef = useRef(encerrar);
   iniciarRef.current = iniciar;
@@ -366,14 +268,32 @@ export default function Home() {
   useEffect(() => {
     const auto = Number(new URLSearchParams(window.location.search).get("auto"));
     // A trava evita subir dois agentes quando o React roda o efeito duas vezes (dev).
-    if (!auto || autoIniciado.current) return;
+    if (!auto || autoIniciado.current || !estadoCompra) return;
+    if (/^LIGANDO/.test(estadoCompra)) return; // espera tocar
     autoIniciado.current = true;
-    iniciarRef.current();
+    iniciarRef.current(estadoCompra === "OFERTAS_COLETADAS");
     setTimeout(() => encerrarRef.current(), auto * 1000);
-  }, []);
+  }, [estadoCompra]);
 
-  const resumoNavegador = resumir(latencias);
-  const tarefa = useTarefa();
+  // A sessão termina sozinha quando a compra muda de fase: depois do "vou ligar pros fornecedores"
+  // e depois do "fechado". Espera o agente terminar de falar (1,2 s de silêncio, máx. 15 s).
+  const estadoAnterior = useRef(estadoCompra);
+  useEffect(() => {
+    const antes = estadoAnterior.current;
+    estadoAnterior.current = estadoCompra;
+    if (estado !== "conversando" || !antes || antes === estadoCompra) return;
+    if (!["LIGANDO_A", "FECHADA", "CANCELADA"].includes(estadoCompra ?? "")) return;
+    const desde = performance.now();
+    const t = setInterval(() => {
+      const agora = performance.now();
+      const falouDepois = ultimoSomAgente.current > desde;
+      if ((falouDepois && agora - ultimoSomAgente.current > 1200) || agora - desde > 15000) {
+        clearInterval(t);
+        encerrarRef.current();
+      }
+    }, 200);
+    return () => clearInterval(t);
+  }, [estadoCompra, estado]);
 
   return (
     <main className="tela mx-auto max-w-[1360px] px-6 pt-10 pb-16 xl:px-10">
@@ -395,10 +315,20 @@ export default function Home() {
             agenteFalando={agenteFalando}
             status={status}
             erro={erro}
-            onIniciar={iniciar}
+            tocando={tocando}
+            onIniciar={() => iniciar(tocando)}
             onEncerrar={encerrar}
           />
-          <ConversaAoVivo falas={tarefa?.conversa ?? []} />
+          {ligacaoAtual ? (
+            <ConversaAoVivo
+              falas={ligacaoAtual.conversa}
+              eu="agente"
+              nomes={{ agente: "Agente", fornecedor: `Fornecedor ${ligacaoAtual.fornecedor.id.toUpperCase()}` }}
+              titulo={`Ligação com o fornecedor ${ligacaoAtual.fornecedor.id.toUpperCase()}`}
+            />
+          ) : (
+            <ConversaAoVivo falas={tarefa?.conversa ?? []} />
+          )}
         </div>
 
         <div className="space-y-6">
@@ -416,7 +346,15 @@ export default function Home() {
                 : null
             }
           />
-          {tarefa && <CartaoLigacao l={tarefa.ligacao} />}
+          {tarefa && (
+            <CartaoCompra
+              compra={tarefa.compra}
+              pedidoCompleto={tarefa.completa}
+              onLigar={() => postar("/api/compra", { acao: "ligar" })}
+              onAprovar={(id) => postar("/api/compra", { acao: "aprovar", oferta_id: id })}
+              onCancelar={() => postar("/api/compra", { acao: "cancelar" })}
+            />
+          )}
           <CartaoLatencia navegador={resumoNavegador} agora={turnos} />
         </div>
       </div>

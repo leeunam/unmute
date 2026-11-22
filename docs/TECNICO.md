@@ -71,15 +71,34 @@ URL=https://<endereço-do-túnel> ./scripts/audio-falso.sh
 Precisa do `ffmpeg`. O Chrome abre em `/?auto=75`: a conversa começa sozinha, encerra depois de 75 s e o terminal
 do servidor imprime as linhas `[latencia-navegador]` e `[latencia-agora]`.
 
-### Ligação para o fornecedor (fase 3)
+### A compra inteira: A, depois B, comparar e fechar (fase 4)
 
-1. Na tela do produtor (pelo túnel), clique em **Ligar para o fornecedor A**. Sem tarefa completa da fase 2, a
-   ligação usa a tarefa de exemplo: 2.000 litros de combustível até quinta, teto R$ 15.000.
-2. Quem faz o papel do fornecedor abre **`/fornecedor/a`** (no celular ou noutra aba). A tela imita um celular
-   tocando com "Chamada recebida · Desenrola Agro". Ao clicar em **Atender**, o agente negociador sobe na Agora e
-   entra no canal. Tocar não gasta minuto: o agente só sobe quando o fornecedor atende.
-3. A oferta aparece ao vivo no cartão **Ligação para o fornecedor** da tela do produtor. Quando o código encerra a
-   ligação, o celular espera a despedida terminar e desliga sozinho. Depois, mostra a latência medida pela Agora.
+1. O produtor faz o pedido por voz. Quando o agente confirma e ele diz "pode ligar", a compra começa e a sessão do
+   produtor termina sozinha depois da frase do agente. Reserva: o botão **Ligar para os fornecedores** no cartão
+   **Compra**.
+2. Quem faz o fornecedor A abre **`/fornecedor/a`** (no celular ou noutra aba) e quem faz o B abre **`/fornecedor/b`**.
+   A tela de A toca primeiro. Quando o código aceita o `encerrar_ligacao` de A, a tela de B toca sozinha. Tocar não
+   gasta minuto: o agente só sobe quando o fornecedor atende.
+3. As duas ofertas aparecem lado a lado no cartão **Compra**, com as marcas "Recomendada", "Fora do prazo" e "Acima do
+   teto". A comparação é do código, sem LLM: descarta a oferta sem preço completo, a que entrega depois do prazo e a
+   que passa do teto, e ordena o resto pelo total com frete.
+4. Com as duas ofertas, a tela do produtor toca ("Desenrola Agro ligando com as propostas"). Ao atender, o agente
+   abre falando a recomendação montada pelo código, por exemplo: "O A sai por catorze mil e duzentos reais, com
+   entrega na quarta. O B é mais barato, mas só entrega na sexta. Fecho com o A?". O produtor diz "fecha", e a
+   compra fica **Fechada com A**. Reserva: os botões **Aprovar** e **Cancelar**.
+
+Estados da compra (`lib/compra.ts`): `CRIADA → LIGANDO_A → LIGANDO_B → OFERTAS_COLETADAS → AGUARDANDO_APROVACAO →
+FECHADA | CANCELADA`. `OFERTAS_COLETADAS` é a tela do produtor tocando; `AGUARDANDO_APROVACAO` começa quando ele atende.
+
+A demo inteira por voz, sem ninguém falando: `./scripts/demo-voz.sh https://<túnel>` gera 4 WAVs
+(`scripts/audio-demo.sh`), abre 4 Chromes headless (produtor, A, B e a volta ao produtor), cada um atende quando a
+sua tela toca, e no fim imprime os estados, as ofertas e os agentes de pé.
+
+Em texto, sem Agora (com `npm start` rodando): `node --env-file=.env.local scripts/fluxo-texto.mjs 1` faz o fluxo
+inteiro e confere cada passo. `npx --yes tsx --test scripts/compra.test.ts` testa a comparação, a frase e a máquina
+de estados sem LLM.
+
+### Uma ligação avulsa para um fornecedor (fase 3)
 
 Sem ninguém falando: `./scripts/audio-fornecedor.sh` gera o WAV com as falas do fornecedor, e
 `node scripts/rodada.mjs https://<túnel>/fornecedor/a <wav> 95` liga, atende sozinho e imprime a latência.
@@ -127,13 +146,22 @@ servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/co
   contexto sem o teto, roda as 3 tools e passa cada frase pelo filtro antes de mandar à Agora.
 - `lib/negociacao.ts`: a ligação em memória, a meta, as tools, o filtro e as duas visões (produtor e fornecedor).
 - `lib/fornecedores.ts`: fornecedores fixos (A e B, nomes fictícios).
+- `lib/compra.ts`: a máquina de estados da compra, a comparação sem LLM, a frase da recomendação e as tools
+  `aprovar_oferta`/`cancelar_tarefa`. `avancar()` é idempotente e roda a cada consulta das telas: quando a ligação da
+  vez termina, faz a próxima tocar.
+- `app/api/compra`: os botões de reserva (ligar, aprovar, cancelar) e o "atender" em texto.
+- `app/api/aprovacao/chat/completions`: o LLM da volta ao produtor. Tools `aprovar_oferta(oferta_id)` e
+  `cancelar_tarefa()`. O código só aprova se a última fala do produtor tem uma palavra de aprovação, usa o fornecedor
+  que ele disse ("fecha com o B") no lugar do que o modelo mandou e só cancela com pedido explícito.
+- Cada ligação fica guardada pelo id do fornecedor (`ligacao(id)` em `lib/negociacao.ts`), e a URL do LLM de cada
+  agente leva `?fornecedor=a`. Assim, quando B começa a tocar, A ainda vê "encerrada" e desliga depois da despedida.
 - `app/fornecedor/[id]`: a tela de celular do fornecedor.
 - `app/api/llm/chat/completions`: o LLM do agente. Recebe o pedido da Agora e responde em streaming pelo
   AI SDK com a feita.ai. Roda a tool `criar_tarefa` numa chamada só ao LLM. Depois da tool,
   quem fala é o código: a pergunta do que falta ou a confirmação. Só o texto vai para a Agora.
 - `lib/tarefa.ts`: a tarefa em memória. Valida o que falta, transforma o prazo falado em data e monta a
   confirmação com números por extenso. Quem decide se a tarefa está completa é este código, não o modelo.
-- `app/api/tarefa`: GET devolve a tarefa e a conversa para a página; POST zera.
+- `app/api/tarefa`: GET devolve a tarefa, a conversa e a compra para a página; POST zera tarefa e compra.
 - `app/api/encerrar`: chama `leave`.
 - `app/api/latencia`: chama `turns` e resume a latência dos turnos de voz.
 - `lib/agora.ts`: toda a configuração do agente (prompt, ASR, LLM, TTS, detecção de fim de fala).

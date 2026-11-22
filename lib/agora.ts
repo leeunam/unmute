@@ -64,6 +64,10 @@ const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
 /** Quem é o agente: o do produtor (padrão) ou o negociador que liga para o fornecedor. */
 export type Perfil = { rota: string; sistema: string; saudacao: string };
 const PRODUTOR: Perfil = { rota: "/api/llm/chat/completions", sistema: SYSTEM_PROMPT, saudacao: GREETING };
+/** A volta ao produtor: a saudação é a recomendação montada pelo código, falada sem passar pelo LLM. */
+export function perfilRetorno(recomendacao: string): Perfil {
+  return { rota: "/api/aprovacao/chat/completions", sistema: SYSTEM_PROMPT, saudacao: recomendacao };
+}
 
 function llmConfig(origin: string, perfil: Perfil) {
   const provider = perfil === PRODUTOR ? process.env.LLM_PROVIDER || "feita-proxy" : "feita-proxy";

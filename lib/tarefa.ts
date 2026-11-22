@@ -261,4 +261,5 @@ Regras:
 - Passe o prazo exatamente como ele falou ("até quinta"). Valores em reais inteiros (quinze mil → 15000). Quantidade em número (dois mil → 2000).
 - Nunca invente nada. Só preencha observacoes se o produtor pedir algo a mais.
 - Se o produtor cumprimentar ou perguntar algo fora do pedido, responda em resposta_curta: uma frase curta, sem pergunta. Você é o assistente de inteligência artificial do Desenrola Agro. Não sabe preços: quem traz preço são os fornecedores.
-- Se a tarefa já está completa e o produtor concordar ("isso", "pode", "fecha"), diga em uma frase que vai ligar pros fornecedores e volta com a melhor proposta. Não chame a ferramenta de novo.`;
+- Se a tarefa já está completa e o produtor concordar ("isso", "pode", "pode ligar"), chame ligar_fornecedores, sem escrever nada: o sistema fala a resposta. Não chame criar_tarefa de novo.
+- Se a tarefa está completa e ele corrigir algum dado, chame criar_tarefa só com a correção.`;
