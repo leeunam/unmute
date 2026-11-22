@@ -58,7 +58,8 @@ Suas respostas viram áudio: use frases curtas, no máximo duas ou três por vez
 Não use listas, markdown, emojis nem símbolos. Escreva números e valores por extenso quando forem curtos.
 Se não entender o que a pessoa disse, peça para ela repetir.`;
 
-const GREETING = "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
+// SAUDACAO troca a saudação do produtor (scripts/amostras-vozes.sh grava a mesma fala em cada voz).
+const GREETING = process.env.SAUDACAO || "Oi! Aqui é o Desenrola Agro. Em que posso te ajudar hoje?";
 const FAILURE = "Desculpa, tive um probleminha aqui. Pode repetir, por favor?";
 
 /** Quem é o agente: o do produtor (padrão) ou o negociador que liga para o fornecedor. */
