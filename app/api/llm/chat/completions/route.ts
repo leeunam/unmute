@@ -11,6 +11,7 @@ import {
   estadoParaPrompt,
   estado,
   PROMPT_PRODUTOR,
+  proximaPergunta,
   registrarConversa,
 } from "@/lib/tarefa";
 
@@ -66,16 +67,17 @@ export async function POST(req: NextRequest) {
     entrada.messages.map((m) => ({ quem: m.role === "user" ? "produtor" : "agente", texto: String(m.content) })),
   );
   const passos: string[] = [];
+  const forcarTool = !estado().completa;
   const result = streamText({
     model: feita.chatModel(modelo),
     ...entrada,
     tools: { criar_tarefa: criarTarefa },
-    // O código decide, não o modelo: enquanto a tarefa estiver incompleta, o 1º passo
-    // é obrigado a chamar criar_tarefa (sem isso o Nemotron pulava a tool e inventava
-    // o produto quando a fala vinha cortada em dois turnos). O 2º passo só fala.
-    prepareStep: ({ stepNumber }) =>
-      stepNumber === 0 ? (estado().completa ? {} : { toolChoice: "required" }) : { toolChoice: "none" },
-    stopWhen: isStepCount(2),
+    // O código decide, não o modelo: enquanto a tarefa estiver incompleta, o modelo é
+    // obrigado a chamar criar_tarefa (sem isso o Nemotron pulava a tool e inventava o
+    // produto). Um passo só: quem fala depois da tool é o código (resultado.fala), sem
+    // a segunda chamada ao LLM. Economiza ~0,5–0,7 s por turno com tool.
+    toolChoice: forcarTool ? "required" : "auto",
+    stopWhen: isStepCount(1),
     maxOutputTokens: body.max_tokens ?? 300,
     abortSignal: req.signal,
     providerOptions: { feita: { reasoning: feitaReasoning(modelo) } } as never,
@@ -98,19 +100,29 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let primeiro = 0;
       let resposta = "";
+      let falaTool = "";
+      const falar = (texto: string) => {
+        if (!primeiro) primeiro = performance.now();
+        resposta += texto;
+        controller.enqueue(chunk({ content: texto }, null));
+      };
       try {
         controller.enqueue(chunk({ role: "assistant" }, null));
         for await (const part of result.fullStream) {
           const ms = Math.round(performance.now() - t0);
           if (part.type === "finish-step") passos.push(`fim_passo@${ms}`);
           if (part.type === "tool-call") passos.push(`tool@${ms} ${JSON.stringify(part.input)}`);
-          if (part.type === "tool-result") passos.push(`resultado ${JSON.stringify(part.output)}`);
           if (part.type === "error") console.error("[llm] erro no stream", part.error);
-          if (part.type !== "text-delta" || !part.text) continue;
-          if (!primeiro) primeiro = performance.now();
-          resposta += part.text;
-          controller.enqueue(chunk({ content: part.text }, null));
+          if (part.type === "tool-result") {
+            passos.push(`resultado ${JSON.stringify(part.output)}`);
+            falaTool = (part.output as { fala?: string }).fala ?? falaTool;
+          }
+          // Com a tool obrigatória, texto do modelo seria narração: não vai para a voz.
+          if (part.type !== "text-delta" || !part.text || forcarTool) continue;
+          falar(part.text);
         }
+        if (falaTool) falar(resposta ? ` ${falaTool}` : falaTool);
+        else if (forcarTool) falar(proximaPergunta());
         registrarConversa([
           ...entrada.messages.map((m) => ({
             quem: m.role === "user" ? ("produtor" as const) : ("agente" as const),

@@ -14,6 +14,12 @@ export const criarTarefaSchema = z.object({
   teto_total: z.number().optional().describe("Valor máximo total em reais inteiros (quinze mil → 15000)"),
   local_entrega: z.string().optional().describe("Onde entregar, só se o produtor disser"),
   observacoes: z.string().optional().describe("Só se o produtor pedir algo a mais. Nunca invente."),
+  resposta_curta: z
+    .string()
+    .optional()
+    .describe(
+      "Só se o produtor cumprimentou ou perguntou algo que não é dado do pedido: UMA frase curta, sem pergunta (o sistema emenda a próxima pergunta). Ex.: \"Aqui é o assistente de inteligência artificial do Desenrola Agro.\" Nunca invente preço.",
+    ),
 });
 export type EntradaTarefa = z.infer<typeof criarTarefaSchema>;
 
@@ -35,6 +41,7 @@ type Estado = {
   faltando: string[];
   completa: boolean;
   confirmacao?: string;
+  vezes: Record<string, number>; // quantas vezes cada pergunta já saiu (rodízio das variações)
   conversa: Fala[];
   atualizado: number;
 };
@@ -47,7 +54,7 @@ const OBRIGATORIOS = ["produto", "quantidade", "unidade", "prazo_entrega", "teto
 
 const g = globalThis as unknown as { __tarefa?: Estado };
 function novo(): Estado {
-  return { tarefa: {}, faltando: [...OBRIGATORIOS], completa: false, conversa: [], atualizado: Date.now() };
+  return { tarefa: {}, faltando: [...OBRIGATORIOS], completa: false, vezes: {}, conversa: [], atualizado: Date.now() };
 }
 export function estado(): Estado {
   return (g.__tarefa ??= novo());
@@ -150,18 +157,39 @@ function dataFalada(isoData: string): string {
 
 const COMBUSTIVEL = /combust|diesel|gasolin|etanol|alcool|oleo/;
 
-const PERGUNTA: Record<string, (t: Tarefa) => string> = {
-  produto: () => "O que o senhor precisa comprar?",
-  quantidade: (t) => (t.unidade ? `Quantos ${t.unidade}?` : "Quanto o senhor precisa?"),
-  unidade: () => "Em que medida? Litros, sacos, toneladas?",
-  prazo_entrega: () => "Pra quando o senhor precisa?",
-  teto_total: () => "Até quanto o senhor topa pagar no total?",
+// Perguntas faladas pelo próprio código (sem segunda chamada ao LLM). 2 ou 3 variações
+// por campo, em rodízio, para não repetir a mesma frase quando o produtor não responde.
+const PERGUNTAS: Record<string, (t: Tarefa) => string[]> = {
+  produto: () => ["O que o senhor precisa comprar?", "Certo. E o que vai ser?", "Me fala o que o senhor precisa."],
+  quantidade: (t) =>
+    t.unidade
+      ? [`Quantos ${t.unidade}?`, `Beleza. Quantos ${t.unidade} o senhor precisa?`, `E vão ser quantos ${t.unidade}?`]
+      : ["Quanto o senhor precisa?", "E qual a quantidade?"],
+  unidade: () => ["É em litros, sacos ou toneladas?", "Em que medida? Litros, sacos ou toneladas?"],
+  prazo_entrega: () => ["Pra quando o senhor precisa?", "Certo. E precisa até quando?", "Qual o prazo pra entregar?"],
+  teto_total: () => ["Até quanto o senhor topa pagar no total?", "E qual o máximo que dá pra pagar?", "Até quanto posso negociar?"],
+  teto_confuso: () => ["Só pra confirmar, até quantos reais no total?", "Desculpa, qual o valor máximo em reais?"],
+  prazo_confuso: () => ["Pra que dia o senhor precisa?", "Não peguei o prazo. Pra que dia é?"],
 };
+
+function perguntar(campo: string, t: Tarefa): string {
+  const e = estado();
+  const opcoes = PERGUNTAS[campo](t);
+  const n = (e.vezes[campo] = (e.vezes[campo] ?? 0) + 1);
+  return opcoes[(n - 1) % opcoes.length];
+}
+
+/** Se o modelo não chamou a tool quando devia, o código ainda pergunta o que falta. */
+export function proximaPergunta(): string {
+  const e = estado();
+  return perguntar(e.faltando[0] ?? "produto", e.tarefa);
+}
 
 export function aplicarCriarTarefa(entrada: EntradaTarefa) {
   const e = estado();
   const t = e.tarefa;
   const erros: string[] = [];
+  let confuso: string | undefined;
   const limpo = (v?: string) => (v && v.trim() ? v.trim() : undefined);
 
   if (limpo(entrada.produto)) t.produto = limpo(entrada.produto);
@@ -170,7 +198,10 @@ export function aplicarCriarTarefa(entrada: EntradaTarefa) {
   if (!t.unidade && t.produto && COMBUSTIVEL.test(semAcento(t.produto))) t.unidade = "litros";
   if (entrada.teto_total) {
     // "15 mil" virando 15 é erro comum do modelo.
-    if (entrada.teto_total < 100) erros.push(`teto_total=${entrada.teto_total} parece estar em milhares. Mande em reais inteiros (quinze mil → 15000).`);
+    if (entrada.teto_total < 100) {
+      erros.push(`teto_total=${entrada.teto_total} parece estar em milhares.`);
+      confuso ??= "teto_confuso";
+    }
     else t.teto_total = entrada.teto_total;
   }
   if (limpo(entrada.prazo_entrega)) {
@@ -178,7 +209,10 @@ export function aplicarCriarTarefa(entrada: EntradaTarefa) {
     if (data) {
       t.prazo_falado = entrada.prazo_entrega!.trim();
       t.prazo_entrega = data;
-    } else erros.push(`Não entendi o prazo "${entrada.prazo_entrega}". Pergunte o dia da entrega.`);
+    } else {
+      erros.push(`Prazo não entendido: "${entrada.prazo_entrega}".`);
+      confuso ??= "prazo_confuso";
+    }
   }
   if (limpo(entrada.local_entrega)) t.local_entrega = limpo(entrada.local_entrega);
   if (limpo(entrada.observacoes)) t.observacoes = limpo(entrada.observacoes);
@@ -188,12 +222,13 @@ export function aplicarCriarTarefa(entrada: EntradaTarefa) {
   e.atualizado = Date.now();
 
   if (!e.completa) {
-    const proximo = e.faltando[0];
+    const proximo = confuso ?? e.faltando[0];
     e.confirmacao = undefined;
     return {
       ok: false,
       erro: [...erros, e.faltando.length ? `Tarefa incompleta. Falta: ${e.faltando.join(", ")}.` : ""].filter(Boolean).join(" "),
-      pergunte_ao_produtor: proximo ? PERGUNTA[proximo](t) : undefined,
+      // A rota fala isto direto, sem devolver ao modelo.
+      fala: [limpo(entrada.resposta_curta), perguntar(proximo, t)].filter(Boolean).join(" "),
     };
   }
 
@@ -204,7 +239,7 @@ export function aplicarCriarTarefa(entrada: EntradaTarefa) {
     `Então ficou assim: ${porExtenso(t.quantidade!)} ${t.unidade} de ${t.produto}, ` +
     `entregue até ${dataFalada(t.prazo_entrega!)}, ${local}, ` +
     `pagando no máximo ${porExtenso(t.teto_total!)} reais. Posso ligar pros fornecedores?`;
-  return { ok: true, tarefa_completa: true, confirmacao: e.confirmacao };
+  return { ok: true, tarefa_completa: true, fala: e.confirmacao };
 }
 
 /** Bloco que entra no prompt a cada turno: o modelo não vê as tool calls antigas. */
@@ -222,9 +257,8 @@ export function estadoParaPrompt(): string {
 export const PROMPT_PRODUTOR = `Agora você está anotando o pedido de compra do produtor.
 Regras:
 - Sempre que o produtor disser qualquer dado do pedido (produto, quantidade, prazo, valor máximo, local), chame a ferramenta criar_tarefa ANTES de responder, só com os dados novos que ele disse.
-- Não diga nada antes de chamar a ferramenta e nunca fale sobre a ferramenta.
+- Não diga nada antes de chamar a ferramenta e nunca fale sobre a ferramenta: o sistema fala a resposta dela.
 - Passe o prazo exatamente como ele falou ("até quinta"). Valores em reais inteiros (quinze mil → 15000). Quantidade em número (dois mil → 2000).
 - Nunca invente nada. Só preencha observacoes se o produtor pedir algo a mais.
-- Se a ferramenta devolver erro, faça ao produtor só a pergunta de pergunte_ao_produtor, curta.
-- Se a ferramenta devolver confirmacao, fale a confirmação exatamente como veio, sem mudar números.
+- Se o produtor cumprimentar ou perguntar algo fora do pedido, responda em resposta_curta: uma frase curta, sem pergunta. Você é o assistente de inteligência artificial do Desenrola Agro. Não sabe preços: quem traz preço são os fornecedores.
 - Se a tarefa já está completa e o produtor concordar ("isso", "pode", "fecha"), diga em uma frase que vai ligar pros fornecedores e volta com a melhor proposta. Não chame a ferramenta de novo.`;
