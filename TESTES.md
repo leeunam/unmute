@@ -574,6 +574,36 @@ Uma das sessões ficou de pé ~2 min porque o `rodada.mjs` parava ao ver "falta"
 as seções 7 e 8 custaram menos de 1 crédito (~60 pedidos de Nemotron e Gemini e 1 de DeepSeek).
 A Agora cobra o agente à parte (US$ 0,10/min, 300 min grátis por mês) do RTC do usuário (US$ 0,00099/min).
 
+### Preencher o silêncio com `filler_words` (21/11/2026)
+
+A Agora tem o recurso nativo `properties.filler_words`: se o LLM não manda texto em `response_wait_ms`, ela fala
+uma frase curta da lista, no máximo uma por turno, e a resposta vem depois. A doc não diz se funciona com LLM
+custom, então foi testado: **funciona com a nossa rota.** Nenhum código na rota. Frases em rodízio: "Hum, deixa
+eu ver.", "Só um instante.", "Certo, um minutinho.", "Deixa eu ver aqui.", "Hum, um momento.".
+Limiar padrão de 700 ms (`FILLER_WAIT_MS`, `0` desliga): turno que o código responde na hora (ex.: a pergunta do
+máximo, `llm_ttft` 282 ms) não ouve nada; turno com tool (0,8–1,2 s na nossa rota) ouve.
+
+Perna do produtor (`scripts/audio-demo.sh`, 3 turnos de voz, todos com `criar_tarefa`), uma rodada por linha.
+O que importa é o **tempo até a primeira voz**, e o navegador mede isso (último som da fala até o primeiro som do agente):
+
+| Filler | `llm_ttft` (Agora) | e2e média (Agora) | Navegador média | Navegador por turno |
+|---|---|---|---|---|
+| desligado | 1084–1205 | 2035 ms | 2328 ms | 2399, 2187, 2399 |
+| **700 ms (padrão)** | 721–724 | 1523 ms | **1890 ms** | 1889, 1860, 1921 |
+| 300 ms | 317–325 | 1189 ms | 1582 ms | 1744, 1468, 1535 |
+
+- A primeira voz chega **~0,44 s antes** com 700 ms. Com o filler, o `llm_ttft` da Agora passa a medir o filler
+  (fica cravado no limiar). A resposta de verdade vem depois, no mesmo tempo de antes.
+- Na gravação dá para ver as duas falas: "Hum, deixa eu ver." (~1,3 s), pausa de ~0,3 s e "Quantos litros?".
+- 300 ms dá filler até em turno rápido, o que fica robótico. 700 ms só pega o turno que vai demorar.
+
+Ligação A (`fornecedor-a.wav`, 6 turnos de voz, filler 700 ms): e2e médio 1528 ms. A oferta saiu completa
+(R$ 7,10, quarta, frete do fornecedor, Pix) e **a interrupção continua funcionando**: o turno 3 terminou
+`interrupted` quando o fornecedor falou por cima. A pergunta do máximo, respondida pelo código, não teve filler.
+
+A volta ao produtor abre com a recomendação montada pelo código (sem espera, sem filler); o "fecha" depois dela
+passa pela rota com tool e ganha o filler como qualquer turno lento. Não foi medido à parte.
+
 ### O que ouvir além do número
 
 - A voz `Portuguese_*` da MiniMax soa brasileira ou portuguesa? Se soar de Portugal, trocar `TTS_VOICE`

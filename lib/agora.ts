@@ -169,6 +169,8 @@ function ttsConfig() {
   throw new Error(`TTS_VENDOR inválido: ${vendor}. Use "cartesia", "minimax" ou "feita".`);
 }
 
+const FILLER_WAIT_MS = Number(process.env.FILLER_WAIT_MS ?? 700);
+
 export function joinBody(channel: string, origin: string, perfil: Perfil = PRODUTOR) {
   return {
     name: `desenrola-${channel}`,
@@ -190,6 +192,21 @@ export function joinBody(channel: string, origin: string, perfil: Perfil = PRODU
           end_of_speech: {
             mode: "vad",
             vad_config: { silence_duration_ms: Number(process.env.VAD_SILENCE_MS || 300) },
+          },
+        },
+      },
+      // Preenche o silêncio: se a nossa rota não mandar texto em FILLER_WAIT_MS (turno com tool, comparação),
+      // a própria Agora fala uma interjeição curta, no máximo uma por turno. Turno rápido não ouve nada.
+      // https://docs.agora.io/en/ai/build/shape-the-conversation/filler-words
+      // FILLER_WAIT_MS=0 desliga.
+      filler_words: {
+        enable: FILLER_WAIT_MS > 0,
+        trigger: { fixed_time_config: { response_wait_ms: Math.max(FILLER_WAIT_MS, 100) } },
+        content: {
+          mode: "static",
+          static_config: {
+            phrases: ["Hum, deixa eu ver.", "Só um instante.", "Certo, um minutinho.", "Deixa eu ver aqui.", "Hum, um momento."],
+            selection_rule: "round_robin",
           },
         },
       },
