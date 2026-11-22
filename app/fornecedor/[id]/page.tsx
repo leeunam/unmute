@@ -6,10 +6,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import type { IAgoraRTCClient, IMicrophoneAudioTrack, IRemoteAudioTrack } from "agora-rtc-sdk-ng";
+import type { Resumo } from "@/lib/resumo";
+import { Celular, type ModoCelular } from "@/components/fornecedor/celular";
+import { CartaoLatencia } from "@/components/produtor/cartao-latencia";
 
 type Visao = { status: "livre" | "tocando" | "em_andamento" | "encerrada" | "recusada"; chamador?: string; descricao?: string };
 type Sessao = { appId: string; channel: string; uid: number; token: string; agentId: string };
-type Turnos = { turnos: { turno: number; inicio: string; fim: string; e2e_ms: number | null; segmentos: Record<string, number> }[]; resumo: { media_ms: number; p50_ms: number; n: number } | null };
+type Turnos = { turnos: { turno: number; inicio: string; fim: string; e2e_ms: number | null; segmentos: Record<string, number> }[]; resumo: Resumo };
 
 const SILENCIO_PARA_DESLIGAR_MS = 1200;
 
@@ -156,63 +159,35 @@ export default function Fornecedor() {
   const tocando = visao.status === "tocando" && fase === "espera";
   const mmss = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
 
+  const modo: ModoCelular = tocando
+    ? "tocando"
+    : fase === "conectando"
+      ? "conectando"
+      : fase === "falando" || fase === "desligando"
+        ? "em_ligacao"
+        : "parado";
+
   return (
-    <main className="celular-pagina">
-      <div className={`celular ${tocando ? "tocando" : ""}`}>
-        {tocando ? (
-          <>
-            <p className="cel-rotulo">Chamada recebida</p>
-            <div className="cel-avatar">DA</div>
-            <p className="cel-nome">{visao.chamador}</p>
-            <p className="cel-desc">{visao.descricao}</p>
-            <div className="cel-botoes">
-              <button className="cel-recusar" onClick={recusar}>Recusar</button>
-              <button className="cel-atender" onClick={atender}>Atender</button>
-            </div>
-          </>
-        ) : fase === "conectando" ? (
-          <p className="cel-rotulo">Conectando…</p>
-        ) : fase === "falando" || fase === "desligando" ? (
-          <>
-            <p className="cel-rotulo">Em ligação · {mmss}</p>
-            <div className={`cel-avatar ${agenteFalando ? "falando" : ""}`}>DA</div>
-            <p className="cel-nome">Desenrola Agro</p>
-            <p className="cel-desc">Assistente de inteligência artificial</p>
-            <div className="cel-botoes">
-              <button className="cel-recusar" onClick={desligar}>Desligar</button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="cel-rotulo">{fase === "fim" ? "Ligação encerrada" : visao.status === "recusada" ? "Chamada recusada" : "Sem chamadas"}</p>
-            <p className="cel-desc">Fornecedor {id.toUpperCase()}</p>
-          </>
-        )}
-      </div>
-      <p className="status">{status}</p>
-      {erro && <p className="erro">{erro}</p>}
+    <main className="tela mx-auto flex max-w-[1360px] flex-col items-center px-6 pt-10 pb-16">
+      <p className="mb-6 text-sm font-medium text-muted-foreground">Celular do fornecedor {id.toUpperCase()} · simulado</p>
+      <Celular
+        modo={modo}
+        chamador={visao.chamador}
+        descricao={visao.descricao}
+        rotuloParado={fase === "fim" ? "Ligação encerrada" : visao.status === "recusada" ? "Chamada recusada" : "Sem chamadas"}
+        fornecedor={id.toUpperCase()}
+        duracao={mmss}
+        agenteFalando={agenteFalando}
+        onAtender={atender}
+        onRecusar={recusar}
+        onDesligar={desligar}
+      />
+      <p className="status mt-6 text-center">{status}</p>
+      {erro && <p className="erro max-w-md text-center">{erro}</p>}
       {turnos && (
-        <section>
-          <h2>Latência medida pela Agora</h2>
-          {turnos.resumo && (
-            <p>
-              <strong>Média {turnos.resumo.media_ms} ms</strong> · p50 {turnos.resumo.p50_ms} ms · {turnos.resumo.n} turnos de voz
-            </p>
-          )}
-          <table>
-            <tbody>
-              {turnos.turnos.map((t) => (
-                <tr key={t.turno}>
-                  <td>{t.turno}</td>
-                  <td>{t.inicio}</td>
-                  <td>{t.fim}</td>
-                  <td>{t.e2e_ms ?? "–"}</td>
-                  <td>{Object.entries(t.segmentos).map(([k, v]) => `${k} ${v}`).join(" · ")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        <div className="mt-2 w-full max-w-md">
+          <CartaoLatencia navegador={null} agora={turnos} />
+        </div>
       )}
     </main>
   );
