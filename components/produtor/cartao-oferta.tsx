@@ -64,7 +64,7 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
         fechada && "bg-surface-accent",
       )}
     >
-      <header className="flex items-center gap-3">
+      <header className="flex items-start gap-3">
         <span
           className={cn(
             "grid size-9 shrink-0 place-items-center rounded-full text-sm font-semibold",
@@ -74,14 +74,16 @@ export function CartaoOferta({ oferta: o, fechada, onAprovar }: Props) {
           {o.id.toUpperCase()}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] leading-tight font-semibold">{o.nome}</p>
-          <p className="text-xs text-muted-foreground">Fornecedor {o.id.toUpperCase()}</p>
+          <p className="text-[15px] leading-tight font-semibold text-balance">{o.nome}</p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            Fornecedor {o.id.toUpperCase()}
+            {o.situacao !== "encerrada" && (
+              <Badge variant="status" tone={s.tone} icon={s.tone !== "neutral"}>
+                {s.rotulo}
+              </Badge>
+            )}
+          </p>
         </div>
-        {o.situacao !== "encerrada" && (
-          <Badge variant="status" tone={s.tone} size="md" icon={s.tone !== "neutral"}>
-            {s.rotulo}
-          </Badge>
-        )}
       </header>
 
       <div className="mt-5 flex items-baseline gap-2">
