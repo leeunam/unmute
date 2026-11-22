@@ -4,7 +4,7 @@ A apresentação do projeto está no [README](../README.md). Aqui fica o que é 
 
 ## O negociador nunca recebe o teto
 
-Este é o destaque técnico da fase 3. O teto do produtor (ex.: R$ 15.000) **não entra no contexto do modelo**. O
+Este é o destaque técnico do negociador. O teto do produtor (ex.: R$ 15.000) **não entra no contexto do modelo**. O
 negociador recebe só uma allowlist do pedido (produto, quantidade, unidade, prazo, local) e uma **meta por unidade**,
 calculada pelo código 10% abaixo do teto por unidade (R$ 7,50 → meta R$ 6,75). Quem compara a oferta com o teto é o
 código, depois, e só a tela do produtor vê essa marca. **O que não está no contexto não tem como vazar.** Nem um
@@ -78,7 +78,7 @@ URL=https://<endereço-do-túnel> ./scripts/audio-falso.sh
 Precisa do `ffmpeg`. O Chrome abre em `/?auto=75`: a conversa começa sozinha, encerra depois de 75 s e o terminal
 do servidor imprime as linhas `[latencia-navegador]` e `[latencia-agora]`.
 
-### A compra inteira: A, depois B, comparar e fechar (fase 4)
+### A compra inteira: A, depois B, comparar e fechar
 
 1. O produtor faz o pedido por voz. Quando o agente confirma e ele diz "pode ligar", a compra começa e a sessão do
    produtor termina sozinha depois da frase do agente. Reserva: o botão **Ligar para os fornecedores** no cartão
@@ -105,7 +105,7 @@ Em texto, sem Agora (com `npm start` rodando): `node --env-file=.env.local scrip
 inteiro e confere cada passo. `npx --yes tsx --test scripts/compra.test.ts` testa a comparação, a frase e a máquina
 de estados sem LLM.
 
-### Uma ligação avulsa para um fornecedor (fase 3)
+### Uma ligação avulsa para um fornecedor
 
 Sem ninguém falando: `./scripts/audio-fornecedor.sh` gera o WAV com as falas do fornecedor, e
 `node scripts/rodada.mjs https://<túnel>/fornecedor/a <wav> 95` liga, atende sozinho e imprime a latência.
