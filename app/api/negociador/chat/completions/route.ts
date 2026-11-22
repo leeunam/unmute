@@ -10,6 +10,7 @@
 // - a despedida é falada pelo código quando encerrar_ligacao passa.
 import { streamText, tool, type ModelMessage } from "ai";
 import { NextRequest } from "next/server";
+import { avancar } from "@/lib/compra";
 import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
 import {
   conferirFrase,
@@ -112,7 +113,8 @@ export async function POST(req: NextRequest) {
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" } },
     );
 
-  const l = ligacao();
+  // A URL do agente traz ?fornecedor=a; sem ele (scripts antigos), vale a última ligação.
+  const l = ligacao(req.nextUrl.searchParams.get("fornecedor") ?? undefined);
   if (!l || l.status === "encerrada") {
     return resposta(async (falar) => falar(l ? "Até mais!" : "Desculpa, essa ligação não está ativa."));
   }
@@ -216,9 +218,10 @@ export async function POST(req: NextRequest) {
       ...msgs.map((m) => ({ quem: m.role === "user" ? ("fornecedor" as const) : ("agente" as const), texto: String(m.content) })),
       { quem: "agente" as const, texto: dito },
     ];
+    avancar(); // se esta ligação acabou, a próxima toca
     const ttft = primeiro ? Math.round(primeiro - t0) : -1;
     console.log(
-      `[negociador] turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(dito)} bloqueios=${JSON.stringify(bloqueios)} passos=${JSON.stringify(passos)}`,
+      `[negociador] fornecedor=${l.fornecedor.id} turno=${turno} modelo=${modelo} ttft_ms=${ttft} total_ms=${Math.round(performance.now() - t0)} resposta=${JSON.stringify(dito)} bloqueios=${JSON.stringify(bloqueios)} passos=${JSON.stringify(passos)}`,
     );
   });
 }

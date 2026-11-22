@@ -11,6 +11,8 @@ type Props = {
   agenteFalando: boolean;
   status: string;
   erro?: string;
+  /** A ligação de volta com as propostas está tocando: o botão atende. */
+  tocando?: boolean;
   onIniciar: () => void;
   onEncerrar: () => void;
 };
@@ -50,7 +52,7 @@ function QuemFala({ nome, ativo, aberta }: { nome: string; ativo: boolean; abert
 }
 
 /** O botão grande de falar, quem está falando e a linha de situação da chamada. */
-export function ChamadaHero({ estado, usuarioFalando, agenteFalando, status, erro, onIniciar, onEncerrar }: Props) {
+export function ChamadaHero({ estado, usuarioFalando, agenteFalando, status, erro, tocando, onIniciar, onEncerrar }: Props) {
   const aberta = estado === "conversando" || estado === "encerrando";
   const ocupado = estado === "conectando" || estado === "encerrando";
   const Icone = estado === "conectando" ? CircleNotch : aberta ? PhoneDisconnect : Microphone;
@@ -63,11 +65,11 @@ export function ChamadaHero({ estado, usuarioFalando, agenteFalando, status, err
           type="button"
           onClick={aberta ? onEncerrar : onIniciar}
           disabled={ocupado}
-          aria-label={aberta ? "Encerrar conversa" : "Falar com o agente"}
+          aria-label={aberta ? "Encerrar conversa" : tocando ? "Atender" : "Falar com o agente"}
           className={cn(
             "m-focus m-press grid size-28 shrink-0 cursor-pointer place-items-center rounded-full text-primary-foreground disabled:cursor-default",
             aberta ? "bg-destructive hover:bg-destructive/90" : "button-primary bg-primary hover:bg-primary-hover",
-            estado === "conversando" && "anel-vivo",
+            (estado === "conversando" || tocando) && "anel-vivo",
           )}
         >
           <Icone weight="fill" className={cn("size-11", estado === "conectando" && "animate-spin")} />
@@ -79,6 +81,10 @@ export function ChamadaHero({ estado, usuarioFalando, agenteFalando, status, err
               <Badge variant="status" tone="success" size="md">
                 Em conversa
               </Badge>
+            ) : tocando ? (
+              <Badge variant="status" tone="warning" size="md">
+                Chamada recebida
+              </Badge>
             ) : estado === "conectando" ? (
               <Badge variant="status" tone="info" size="md">
                 Conectando
@@ -89,7 +95,9 @@ export function ChamadaHero({ estado, usuarioFalando, agenteFalando, status, err
               </Badge>
             )}
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight">{TITULO[estado]}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {tocando ? "Desenrola Agro ligando com as propostas" : TITULO[estado]}
+          </h2>
           <p className="mt-1 min-h-[1.5em] text-[15px] text-muted-foreground">
             {status || (aberta ? "" : "Toque no botão e diga o produto, a quantidade, o prazo e quanto quer pagar no máximo.")}
           </p>

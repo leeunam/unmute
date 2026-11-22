@@ -4,6 +4,8 @@
 // roda aqui, em vários passos; a Agora só recebe o texto em streaming.
 import { isStepCount, streamText, tool, type ModelMessage } from "ai";
 import { NextRequest } from "next/server";
+import { z } from "zod";
+import { compra, iniciarLigacoes } from "@/lib/compra";
 import { feita, feitaModelId, feitaReasoning } from "@/lib/feita";
 import {
   aplicarCriarTarefa,
@@ -49,6 +51,18 @@ const criarTarefa = tool({
   execute: async (entrada) => aplicarCriarTarefa(entrada),
 });
 
+// Tarefa completa e o produtor disse "pode": o código começa a compra e fala a resposta.
+const ligarFornecedores = tool({
+  description: 'Começa as ligações para os fornecedores. Chame quando a tarefa está completa e o produtor concordou ("pode", "isso", "pode ligar").',
+  inputSchema: z.object({}),
+  execute: async () => {
+    const r = iniciarLigacoes();
+    return r.ok
+      ? { ok: true, fala: "Beleza! Vou ligar pros fornecedores e já volto com a melhor proposta." }
+      : { ok: false, fala: "Já estou cuidando das ligações. Assim que tiver as propostas eu volto." };
+  },
+});
+
 export async function POST(req: NextRequest) {
   const t0 = performance.now();
   const segredo = process.env.LLM_PROXY_SECRET;
@@ -68,10 +82,13 @@ export async function POST(req: NextRequest) {
   );
   const passos: string[] = [];
   const forcarTool = !estado().completa;
+  // Depois de a compra começar, o pedido não muda mais: só conversa.
+  const emCompra = compra().estado !== "CRIADA";
+  if (emCompra) entrada.instructions += `\n\nAs ligações já começaram (${compra().estado}). Diga em uma frase que está ligando pros fornecedores e volta com a melhor proposta.`;
   const result = streamText({
     model: feita.chatModel(modelo),
     ...entrada,
-    tools: { criar_tarefa: criarTarefa },
+    tools: forcarTool ? { criar_tarefa: criarTarefa } : emCompra ? {} : { criar_tarefa: criarTarefa, ligar_fornecedores: ligarFornecedores },
     // O código decide, não o modelo: enquanto a tarefa estiver incompleta, o modelo é
     // obrigado a chamar criar_tarefa (sem isso o Nemotron pulava a tool e inventava o
     // produto). Um passo só: quem fala depois da tool é o código (resultado.fala), sem

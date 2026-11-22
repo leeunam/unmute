@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { startAgent, USER_UID, userRtcToken } from "@/lib/agora";
+import { avancar } from "@/lib/compra";
 import { ligacao, novaLigacao, PROMPT_NEGOCIADOR, saudacao, visaoFornecedor } from "@/lib/negociacao";
 
 export const dynamic = "force-dynamic";
 
 // GET ?fornecedor=a: o que o celular do fornecedor mostra (sem pedido, sem teto).
+// Também anda a compra: quando A termina, é esta consulta do celular de B que o faz tocar.
 export async function GET(req: NextRequest) {
+  avancar();
   return NextResponse.json(visaoFornecedor(req.nextUrl.searchParams.get("fornecedor") ?? ""));
 }
 
 // POST {acao, fornecedor}
-//   ligar:   o celular do fornecedor começa a tocar (ainda sem agente: tocar não gasta minuto da Agora)
+//   ligar:   o celular do fornecedor começa a tocar (ainda sem agente: tocar não gasta minuto da Agora).
+//            Liga só para um fornecedor, fora da compra (teste de uma ligação). A compra usa /api/compra.
 //   atender: sobe o agente negociador no canal e devolve o token do fornecedor
 //   recusar: marca a ligação como recusada
-//   texto:   ligação sem Agora, para testar em texto (scripts/negociacao-texto.mjs)
+//   texto:   ligação sem Agora, para testar em texto. Se o celular estiver tocando (compra), atende;
+//            senão cria uma ligação avulsa (scripts/negociacao-texto.mjs)
 export async function POST(req: NextRequest) {
   const { acao, fornecedor = "a" } = await req.json();
   try {
@@ -22,16 +27,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
     if (acao === "texto") {
-      const l = novaLigacao(fornecedor, "em_andamento");
+      const tocando = ligacao(fornecedor);
+      const l = tocando?.status === "tocando" ? tocando : novaLigacao(fornecedor, "em_andamento");
+      l.status = "em_andamento";
       return NextResponse.json({ saudacao: saudacao(l) });
     }
-    const l = ligacao();
-    if (!l || l.fornecedor.id !== fornecedor || l.status !== "tocando") {
+    const l = ligacao(fornecedor);
+    if (!l || l.status !== "tocando") {
       return NextResponse.json({ erro: "Nenhuma chamada tocando para este fornecedor." }, { status: 409 });
     }
     if (acao === "recusar") {
       l.status = "recusada";
       l.fim = Date.now();
+      avancar();
       return NextResponse.json({ ok: true });
     }
     if (acao === "atender") {
@@ -40,7 +48,8 @@ export async function POST(req: NextRequest) {
       const channel = `ligacao-${fornecedor}-${Date.now()}`;
       const fala = saudacao(l);
       const agent = await startAgent(channel, `${proto}://${host}`, {
-        rota: "/api/negociador/chat/completions",
+        // O id na URL: cada agente acha a sua ligação, mesmo quando a do outro fornecedor já começou.
+        rota: `/api/negociador/chat/completions?fornecedor=${l.fornecedor.id}`,
         sistema: PROMPT_NEGOCIADOR, // a rota troca pelo prompt completo com o contexto; aqui é só o padrão da Agora
         saudacao: fala,
       });

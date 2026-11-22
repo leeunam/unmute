@@ -63,9 +63,18 @@ export type Ligacao = {
 // Tarefa de exemplo quando a fase 2 ainda não tem tarefa completa (o caso da demo).
 const EXEMPLO = { produto: "combustível", quantidade: 2000, unidade: "litros", prazo_falado: "até quinta", teto_total: 15000, local_entrega: "na sede da fazenda" };
 
-const g = globalThis as unknown as { __ligacao?: Ligacao };
-export function ligacao(): Ligacao | undefined {
-  return g.__ligacao;
+// Uma ligação por fornecedor: quando B começa a tocar, A ainda está se despedindo e o
+// celular de A precisa continuar vendo "encerrada". Cada agente acha a sua pelo id na URL.
+const g = globalThis as unknown as { __ligacoes?: Record<string, Ligacao>; __atual?: string };
+const ligacoes = () => (g.__ligacoes ??= {});
+/** A ligação de um fornecedor; sem id, a última que começou. */
+export function ligacao(id?: string): Ligacao | undefined {
+  const chave = id?.toLowerCase() ?? g.__atual;
+  return chave ? ligacoes()[chave] : undefined;
+}
+export function resetarLigacoes() {
+  g.__ligacoes = {};
+  g.__atual = undefined;
 }
 
 const centavos = (n: number) => Math.round(n * 100) / 100;
@@ -91,7 +100,7 @@ export function novaLigacao(idFornecedor: string, status: Status): Ligacao {
     local_entrega: base.local_entrega ?? EXEMPLO.local_entrega,
   };
   const teto = base.teto_total!;
-  g.__ligacao = {
+  const l: Ligacao = {
     fornecedor: f,
     status,
     pedido,
@@ -109,7 +118,9 @@ export function novaLigacao(idFornecedor: string, status: Status): Ligacao {
     inicio: Date.now(),
     privado: { teto_total: teto },
   };
-  return g.__ligacao;
+  ligacoes()[f.id] = l;
+  g.__atual = f.id;
+  return l;
 }
 
 export function podeEncerrar(l: Ligacao) {
@@ -484,9 +495,7 @@ export const ehDespedida = (frase: string) => DESPEDIDA.test(frase);
 // ---------- visões para as telas ----------
 
 /** Para a tela do produtor: tudo, inclusive a comparação com o teto (feita aqui). */
-export function visaoProdutor() {
-  const l = ligacao();
-  if (!l) return null;
+export function visaoProdutor(l: Ligacao) {
   const o = l.oferta;
   return {
     fornecedor: l.fornecedor,
@@ -508,7 +517,7 @@ export function visaoProdutor() {
 
 /** Para o celular do fornecedor: só o que um telefone mostraria. */
 export function visaoFornecedor(id: string) {
-  const l = ligacao();
-  if (!l || l.fornecedor.id !== id) return { status: "livre" as const };
+  const l = ligacao(id);
+  if (!l) return { status: "livre" as const };
   return { status: l.status, chamador: "Desenrola Agro", descricao: "Assistente de inteligência artificial" };
 }
