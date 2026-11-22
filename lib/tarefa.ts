@@ -197,7 +197,9 @@ export function aplicarCriarTarefa(entrada: EntradaTarefa) {
     };
   }
 
-  const local = t.local_entrega ?? PERFIL.local_entrega;
+  // Sem local falado, vale o do perfil do produtor (não é inventado: é cadastro).
+  t.local_entrega ??= PERFIL.local_entrega;
+  const local = t.local_entrega;
   e.confirmacao =
     `Então ficou assim: ${porExtenso(t.quantidade!)} ${t.unidade} de ${t.produto}, ` +
     `entregue até ${dataFalada(t.prazo_entrega!)}, ${local}, ` +

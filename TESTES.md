@@ -195,6 +195,65 @@ primeira palavra numa chamada. Lento demais para voz.
 **Leitura:** os dois servem para tools. O Gemini é mais confiável nos argumentos e soa mais natural. O Nemotron
 é ~0,4 s mais rápido, mas fala demais e precisa de um prompt mais rígido para não narrar a tool nem inventar campos.
 
+## Fase 2: o pedido do produtor vira tarefa estruturada
+
+**Pergunta:** o agente transforma o pedido falado numa tarefa completa, pergunta o que falta e confirma em voz alta?
+
+**Como funciona:** a tool `criar_tarefa` (schema zod, todos os campos opcionais) roda dentro da nossa rota de LLM
+com o AI SDK em dois passos: no passo 1 o modelo chama a tool, no passo 2 ele fala. A Agora só recebe o texto.
+O código decide se a tarefa está completa (`lib/tarefa.ts`): junta os campos com o que já tinha, transforma "até quinta"
+em data (America/Sao_Paulo), devolve ao modelo o que falta e uma pergunta curta ("Quantos litros?"). Com a tarefa
+completa, devolve a confirmação pronta com os números por extenso, e o modelo só lê. A Agora não manda as tool calls
+de volta no histórico, então o estado fica em memória no servidor e entra no prompt a cada turno. O local de entrega,
+se não for falado, vem do perfil fixo do produtor ("na sede da fazenda"). A página consulta `/api/tarefa` a cada 500 ms.
+
+#### 9. Gemini Flash Lite contra Nemotron 3 Super com `criar_tarefa` (21/11/2026, só texto)
+
+`scripts/conversa-texto.mjs`: manda à rota local o mesmo histórico que a Agora mandaria. Dois roteiros:
+- **Demo:** "Oi, preciso falar com meu fornecedor de combustível, pra reabastecer até quinta. Desenrola um preço de até 15 mil." → "Dois mil litros." → "Isso, pode seguir."
+- **Frase cortada** (o VAD pode partir a frase da demo): "…pra reabastecer até quinta." → "Desenrola um preço de até 15 mil." → "Uns dois mil litros." → "Isso."
+
+Tempo até o primeiro texto na nossa rota. "Turno com tool" conta as duas chamadas ao LLM.
+
+| Modelo | Tool forçada no 1º passo | Tarefa certa | Turno com tool | Turno sem tool | Problemas |
+|---|---|---|---|---|---|
+| Gemini 3.5 Flash Lite | não | **5/5** (3 demo, 2 cortada) | 0,94–1,42 s | 0,60–0,77 s | Nenhum |
+| Gemini 3.5 Flash Lite | sim | **5/5** (3 demo, 2 cortada) | 0,99–1,40 s | 0,62–0,74 s | Nenhum |
+| Nemotron 3 Super | não | 3/3 demo, **0/2 cortada** | 0,79–1,24 s | 0,33–0,48 s | Na frase cortada, pulou a tool, fez 2 ou 3 perguntas por turno e **inventou "diesel S10"**, que foi gravado na tarefa |
+| Nemotron 3 Super | sim | 4/5 | 1,5–23 s | 0,36–0,71 s | Ignora `tool_choice: "required"` no gateway: o AI SDK acusa `AI_ToolChoiceViolationError` e tenta de novo (turnos de 6, 19 e 23 s). Uma rodada terminou com a tarefa vazia. |
+
+Em todas as rodadas do Gemini: perguntou só "Quantos litros?", passou `prazo_entrega: "até quinta"` e
+`teto_total: 15000` certos, não inventou `observacoes`, não narrou a tool e leu a confirmação sem mudar números.
+
+**Decisão:** Gemini 3.5 Flash Lite virou o modelo padrão (`lib/feita.ts`). O Nemotron é ~0,3 s mais rápido, mas erra
+justamente onde a voz é imprevisível. A rota obriga a tool no 1º passo enquanto a tarefa está incompleta; com o
+Gemini isso não custa nada e garante que nenhum dado falado se perde.
+
+#### 10. Prova de voz pela Agora (21/11/2026)
+
+Uma rodada com `scripts/rodada.mjs` e o roteiro da demo na voz Luciana do macOS. Deepgram nova-3, Gemini 3.5 Flash Lite
+pela nossa rota e túnel, Cartesia sonic-3.6, VAD 300 ms.
+
+| Turno | Fala do produtor (ASR) | Resposta do agente | e2e Agora | `llm_ttft` Agora | TTFT na rota | Navegador |
+|---|---|---|---|---|---|---|
+| 2 (tool) | "Oi? Preciso falar com meu fornecedor de combustível. Para reabastecer até quinta. Desenrola um preço de até quinze mil." | "Quantos litros?" | 2842 ms | 1958 ms | 1656 ms | 3270 ms |
+| 3 (tool) | "Dois mil litros." | "Então ficou assim: dois mil litros de combustível, entregue até quinta-feira, dia vinte e seis, na sede da fazenda, pagando no máximo quinze mil reais. Posso ligar pros fornecedores?" | 2437 ms | 1541 ms | 1378 ms | 2603 ms |
+| 4 (sem tool) | "Isso, pode seguir." | "Beleza, vou ligar pros fornecedores agora e volto daqui a pouco com a melhor proposta para o senhor." | 1938 ms | 1038 ms | 865 ms | 2198 ms |
+
+Tarefa na tela ao fim: combustível, 2.000 litros, quinta-feira 26/11 ("até quinta"), R$ 15.000, completa.
+
+**Leitura:**
+- **Funciona de ponta a ponta:** a frase da demo chegou num turno só, o agente perguntou só a quantidade, confirmou com
+  os números por extenso, e a tarefa ficou completa na tela enquanto a conversa acontecia.
+- **Turnos com tool custam ~0,5–0,9 s a mais** que um turno comum, porque são duas chamadas ao LLM antes do primeiro
+  áudio. O e2e fica em 2,4–2,8 s, acima do alvo de 1,5 s. O turno sem tool ficou em 1,9 s.
+- A Agora vê ~0,2–0,3 s a mais de `llm_ttft` que a nossa rota: é o trecho nuvem da Agora → túnel → Mac.
+- O turno 3 aparece como `interrupted`: a frase seguinte do WAV entrou enquanto a confirmação (~10 s) ainda tocava.
+  É o roteiro gravado, não uma falha. A interrupção funcionou.
+- **Próximo passo para a latência:** quando a tool devolve a pergunta ou a confirmação, a rota pode falar esse texto
+  direto, sem a segunda chamada ao LLM. Ganharia ~0,5–0,7 s nos turnos com tool, mas aí quem fala é o código, não o
+  modelo. Não foi feito: fica para decidir.
+
 ### Gasto
 
 Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
@@ -204,7 +263,11 @@ Reserva para a demo: 80 créditos gerais da feita e 60 min de agente da Agora.
 | Início do projeto | 200 | 10.000 | 0 |
 | Fim da seção 6 (bake-off) | 189 | 10.000 | ~8 (7 sessões) |
 | Fim das seções 7 e 8 | 189 | 10.000 | ~17 (14 sessões) |
+| Fim da fase 2 (seções 9 e 10) | 185 | 10.000 | ~20 (16 sessões) |
 
+A fase 2 gastou 4 créditos: ~75 pedidos em texto, quase todos com duas chamadas por turno, e 2 sessões de voz.
+Uma das sessões ficou de pé ~2 min porque o `rodada.mjs` parava ao ver "falta" na página (o cartão do pedido mostra
+"falta: …"). O critério de parada foi corrigido e o agente, encerrado.
 1 crédito ≈ US$ 0,01, pelo custo por pedido que o gateway devolve. O saldo da API vem arredondado:
 as seções 7 e 8 custaram menos de 1 crédito (~60 pedidos de Nemotron e Gemini e 1 de DeepSeek).
 A Agora cobra o agente à parte (US$ 0,10/min, 300 min grátis por mês) do RTC do usuário (US$ 0,00099/min).

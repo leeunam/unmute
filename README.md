@@ -3,8 +3,8 @@
 O produtor rural fala o que precisa e um agente de voz negocia com os fornecedores por ele.
 A spec completa está em [`CLAUDE.md`](CLAUDE.md).
 
-Este repositório está na **fase 1**: um agente de voz da Agora conversando em português do Brasil
-no navegador, com a latência medida. O resultado dos testes fica em [`TESTES.md`](TESTES.md).
+Este repositório está na **fase 2**: o produtor fala o pedido para o agente de voz da Agora e ele vira uma tarefa
+estruturada na tela, com o agente perguntando o que faltar. O resultado dos testes fica em [`TESTES.md`](TESTES.md).
 
 ## Como rodar
 
@@ -17,7 +17,9 @@ npm run build && npm start   # num terminal (dev também funciona, mas compila a
 npm run tunel                # noutro: mostra um endereço https://…trycloudflare.com
 ```
 
-Abra **o endereço do túnel** no navegador, clique em **Falar com o agente**, permita o microfone e converse.
+Abra **o endereço do túnel** no navegador, clique em **Falar com o agente**, permita o microfone e diga o pedido,
+por exemplo: "Oi, preciso falar com meu fornecedor de combustível, pra reabastecer até quinta. Desenrola um preço de
+até 15 mil." O cartão **Pedido** se preenche enquanto você fala.
 A Agora precisa chamar a nossa rota de LLM pela internet. Por isso o app é aberto pelo túnel, e o servidor
 usa esse mesmo endereço para a Agora.
 
@@ -47,6 +49,12 @@ URL=https://<endereço-do-túnel> ./scripts/audio-falso.sh
 Precisa do `ffmpeg`. O Chrome abre em `/?auto=75`: a conversa começa sozinha, encerra depois de 75 s e o terminal
 do servidor imprime as linhas `[latencia-navegador]` e `[latencia-agora]`.
 
+Para testar o pedido em texto, sem Agora e sem gastar minutos (com `npm start` rodando):
+
+```bash
+node --env-file=.env.local scripts/conversa-texto.mjs google/gemini-3.5-flash-lite 3
+```
+
 Para medir só o LLM (sem Agora), compare o gateway direto com a nossa rota:
 
 ```bash
@@ -62,13 +70,18 @@ navegador ──(RTC, áudio)── canal Agora ── agente do Conversational 
     │ POST /api/sessao                      TTS: Cartesia sonic-3.6 (gerenciado pela Agora)
     ▼                                       LLM: chama a nossa rota ↓
 servidor Next.js ◀──(túnel cloudflared)──── POST /api/llm/chat/completions (SSE, formato OpenAI)
-    │                                          AI SDK streamText → gateway da feita.ai (Nemotron 3 Super)
+    │                                          AI SDK streamText + tool criar_tarefa → gateway da feita.ai
+    │                                          (Gemini 3.5 Flash Lite)
+    └── GET /api/tarefa (a página consulta a cada 500 ms)
     └──(REST)── api.agora.io/api/conversational-ai-agent/v2 (join, leave, turns)
 ```
 
 - `app/api/sessao`: cria o canal, gera os tokens e chama `join` para subir o agente.
 - `app/api/llm/chat/completions`: o LLM do agente. Recebe o pedido da Agora e responde em streaming pelo
-  AI SDK com a feita.ai. É aqui que entram tools e estado nas próximas fases.
+  AI SDK com a feita.ai. Roda a tool `criar_tarefa` em dois passos e só manda o texto para a Agora.
+- `lib/tarefa.ts`: a tarefa em memória. Valida o que falta, transforma o prazo falado em data e monta a
+  confirmação com números por extenso. Quem decide se a tarefa está completa é este código, não o modelo.
+- `app/api/tarefa`: GET devolve a tarefa e a conversa para a página; POST zera.
 - `app/api/encerrar`: chama `leave`.
 - `app/api/latencia`: chama `turns` e resume a latência dos turnos de voz.
 - `lib/agora.ts`: toda a configuração do agente (prompt, ASR, LLM, TTS, detecção de fim de fala).
