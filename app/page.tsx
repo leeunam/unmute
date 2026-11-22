@@ -53,6 +53,23 @@ function valorCampo(k: string, t: EstadoTarefa["tarefa"]) {
   return String(v);
 }
 
+// Resumo de uma linha do pedido, para quando a compra já começou: "2.500 L de Diesel S10 · até qui 26/11 · teto R$ 15.000".
+function resumoPedido(t: EstadoTarefa["tarefa"]) {
+  const un = t.unidade === "litros" ? "L" : t.unidade;
+  const prazo = t.prazo_entrega
+    ? new Date(`${t.prazo_entrega}T12:00:00Z`)
+        .toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" })
+        .replace(/\.,?/g, "")
+    : undefined;
+  return [
+    `${Number(t.quantidade).toLocaleString("pt-BR")} ${un} de ${t.produto}`,
+    prazo && `até ${prazo}`,
+    t.teto_total !== undefined && `teto R$ ${Number(t.teto_total).toLocaleString("pt-BR")}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 // A tarefa fica em memória no servidor; a página consulta a cada 500 ms
 // (mais simples que SSE e não sofre com buffer do túnel).
 function useTarefa() {
@@ -296,8 +313,8 @@ export default function Home() {
   }, [estadoCompra, estado]);
 
   return (
-    <main className="tela mx-auto max-w-[1360px] px-6 pt-10 pb-16 xl:px-10">
-      <header className="mb-8 flex items-center gap-3">
+    <main className="tela mx-auto max-w-[1360px] px-6 pt-6 pb-16 xl:px-10">
+      <header className="mb-5 flex items-center gap-3">
         <span className="grid size-10 place-items-center rounded-xl bg-surface-accent text-primary-ink">
           <Plant weight="duotone" className="size-6" />
         </span>
@@ -329,10 +346,12 @@ export default function Home() {
           ) : (
             <ConversaAoVivo falas={tarefa?.conversa ?? []} />
           )}
+          <CartaoLatencia navegador={resumoNavegador} agora={turnos} />
         </div>
 
         <div className="space-y-6">
           <CartaoPedido
+            resumo={estadoCompra && estadoCompra !== "CRIADA" && tarefa ? resumoPedido(tarefa.tarefa) : undefined}
             completa={tarefa?.completa ?? false}
             campos={
               tarefa
@@ -355,7 +374,6 @@ export default function Home() {
               onCancelar={() => postar("/api/compra", { acao: "cancelar" })}
             />
           )}
-          <CartaoLatencia navegador={resumoNavegador} agora={turnos} />
         </div>
       </div>
     </main>

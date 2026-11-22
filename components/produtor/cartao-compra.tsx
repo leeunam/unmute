@@ -79,13 +79,21 @@ export function CartaoCompra({ compra: c, pedidoCompleto, onLigar, onAprovar, on
   const fechadaCom = c.estado === "FECHADA" ? c.fechada_com : undefined;
   return (
     <Card>
-      <CardHeader className="flex-row items-center gap-3">
+      <CardHeader className="flex-row items-center gap-3 pb-3">
         <span className="grid size-9 place-items-center rounded-[10px] bg-surface-accent text-primary-ink">
           <Handshake weight="duotone" className="size-5" />
         </span>
         <CardTitle className="flex-1">Compra</CardTitle>
+        <span className="flex gap-4 text-sm">
+          <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/a" target="_blank" rel="noreferrer">
+            Celular do A
+          </a>
+          <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/b" target="_blank" rel="noreferrer">
+            Celular do B
+          </a>
+        </span>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-4">
         <EtapasCompra atual={ETAPA[c.estado] ?? "pedido"} />
 
         {fechadaCom && (
@@ -114,28 +122,28 @@ export function CartaoCompra({ compra: c, pedidoCompleto, onLigar, onAprovar, on
           ))}
         </div>
 
-        {c.frase && !fechadaCom && <Recomendacao frase={c.frase} />}
+        {(c.frase && !fechadaCom) || decidindo ? (
+          <div className="flex items-center gap-4">
+            {c.frase && !fechadaCom ? (
+              <div className="flex-1">
+                <Recomendacao frase={c.frase} />
+              </div>
+            ) : (
+              <span className="flex-1" />
+            )}
+            {decidindo && (
+              <Button variant="tertiary" className="shrink-0" onClick={onCancelar}>
+                Cancelar compra
+              </Button>
+            )}
+          </div>
+        ) : null}
 
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          {c.estado === "CRIADA" && (
-            <Button size="lg" onClick={onLigar} disabled={!pedidoCompleto}>
-              Ligar para os fornecedores
-            </Button>
-          )}
-          {decidindo && (
-            <Button variant="tertiary" onClick={onCancelar}>
-              Cancelar compra
-            </Button>
-          )}
-          <span className="ml-auto flex gap-4">
-            <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/a" target="_blank" rel="noreferrer">
-              Celular do A
-            </a>
-            <a className="text-primary-ink underline-offset-4 hover:underline" href="/fornecedor/b" target="_blank" rel="noreferrer">
-              Celular do B
-            </a>
-          </span>
-        </div>
+        {c.estado === "CRIADA" && (
+          <Button size="lg" onClick={onLigar} disabled={!pedidoCompleto}>
+            Ligar para os fornecedores
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
